@@ -154,10 +154,9 @@ The Colorado Ecological Data Application System Multimetric Index (MMI) is a bio
 
 MMI scores are assessed as follows:
 
-![Table 1 from Policy 10-1](C:/Users/GeorgeValentine/Box/Lake George Dam Removal/Sample Data/Macroinvertebrates/Results from NAMC/CO MMI v5 Thresholds table.png)
+![Table 1 from Policy 10-1](../imgs/CO MMI v5 Thresholds table.png)
 
-![Table 3 from Policy 10-1](C:/Users/GeorgeValentine/Box/Lake George Dam Removal/Sample Data/Macroinvertebrates/Results from NAMC/CO MMI v5 High Scoring Thresholds table.png)
-
+![Table 3 from Policy 10-1](../imgs/CO MMI v5 High Scoring Thresholds table.png)
 
 How has the MMI score of each site changed over the course of the study?
 ```{r}
@@ -198,7 +197,7 @@ macro_data %>%
 
 What about the sites with MMI scores that fall between impairment and attainment? The CO MMI v5 update includes auxiliary thresholds for this determination based off of the Hilsenhoff Biotic Index and the Shannon Diversity Index:
 
-![Table 2 from Policy 10-1](C:/Users/GeorgeValentine/Box/Lake George Dam Removal/Sample Data/Macroinvertebrates/Results from NAMC/CO MMI v5 Auxiliary Metric Thresholds table.png)
+![Table 2 from Policy 10-1](../imgs/CO MMI v5 Auxiliary Metric Thresholds table.png)
 
 ```{r, warning = FALSE}
 macro_data %>% select(Site, Sample,`Index Score`, Condition, `Unique Hilsenhoff`, `Unique Shannons`) %>% 
