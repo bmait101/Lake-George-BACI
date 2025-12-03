@@ -10,6 +10,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 # Load libraries
+library(here)        # For relative file paths
 library(readxl)      # For reading in Excel files
 library(data.table)
 library(tidyverse)   # For tidy data management
@@ -21,7 +22,7 @@ Updates from v1.0: The summer 2025 results file from the NAMC included all previ
 
 ```{r loadData}
 # specify folder path where results are saved
-loadPath <- "C:/Users/GeorgeValentine/Box/Lake George Dam Removal/Sample Data/Macroinvertebrates/Results from NAMC/LakeGeorge_historical_CO_MMI.xlsx"
+loadPath <- here::here("data","LakeGeorge_historical_CO_MMI.xlsx")
 
 #----------------------------------------------------------------------------------
 # Load sample data
