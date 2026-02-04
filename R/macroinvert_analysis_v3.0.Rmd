@@ -22,7 +22,7 @@ Updates from v2.0: Update plots to compound/multi-panel.
 
 ```{r loadData}
 # specify folder path where results are saved
-loadPath <- here::here("data","LakeGeorge_historical_CO_MMI.xlsx")
+loadPath <- "C:/Users/GeorgeValentine/Box/Lake George Dam Removal/Sample Data/Macroinvertebrates/Results from NAMC/LakeGeorge_historical_CO_MMI_Jan_2026.xlsx"
 
 #----------------------------------------------------------------------------------
 # Load sample data
@@ -50,14 +50,16 @@ macro_sampleData <- macro_sampleData %>%
                             `Collection Date` > '2023-9-1' & `Collection Date` < '2023-12-31' ~ "Fall 2023",
                             `Collection Date` > '2024-5-31' & `Collection Date` < '2024-9-1' ~ "Summer 2024",
                             `Collection Date` > '2024-9-1' & `Collection Date` < '2024-12-31' ~ "Fall 2024",
-                            `Collection Date` > '2025-5-31' & `Collection Date` < '2025-9-1' ~ "Summer 2025"))
+                            `Collection Date` > '2025-5-31' & `Collection Date` < '2025-9-1' ~ "Summer 2025",
+                            `Collection Date` > '2025-9-1' & `Collection Date` < '2025-12-31' ~ "Fall 2025"))
 
 macro_sampleData$Sample <- factor(macro_sampleData$Sample,
                                levels = c("Summer 2023",
                                           "Fall 2023",
                                           "Summer 2024",
                                           "Fall 2024",
-                                          "Summer 2025"))
+                                          "Summer 2025",
+                                          "Fall 2025"))
 
 # rename and order sites as factor from upstream to downstream
 macro_sampleData <- macro_sampleData %>% 
@@ -129,7 +131,9 @@ macro_sampleData$Community = factor(macro_sampleData$Community,
 
 #----------------------------------------------------------------------------------
 # Load multi-metric index data (CO MMI v5)
-macro_indices <- read_excel(loadPath, sheet = "Index results - CO_MMI_v5")
+macro_indices <- read_excel(loadPath, sheet = "Index results")
+macro_indices <- macro_indices %>% 
+  filter(`Index name` == "CO Ecological Data Application System Multimetric Index - Transition 2025")
 
 #----------------------------------------------------------------------------------
 # Load metrics data
@@ -176,13 +180,14 @@ macro_data %>%
   geom_bar(stat = 'identity', position = 'dodge') + 
   theme_classic() +
   theme(axis.text.x = element_text(angle=45, hjust = 1)) +
+  labs(title = "Unfiltered Data") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
   geom_hline(aes(yintercept = 53), linetype="dashed") +
   geom_text(aes(x = "Downstream 3", y = 32), label = "Impairment", size = 3) +
   geom_text(aes(x = "Downstream 3", y = 42), label = "Attainment", size = 3) +
-   geom_text(aes(x = "Downstream 3", y = 52), label = "High-Scoring", size = 3)
+  geom_text(aes(x = "Downstream 3", y = 52), label = "High-Scoring", size = 3)
 ```
 
 ```{r, warning = FALSE}
@@ -193,7 +198,28 @@ macro_data %>%
   theme_classic() +
   theme(axis.text.x = element_text(angle=45, hjust = 1)) +
   facet_wrap(~Site) +
-  labs(y = "Colorado MMI Score") +
+  labs(y = "Colorado MMI Score",
+       title = "Unfiltered Data") +
+  #geom_vline(aes(xintercept = "Fall 2023"), linetype="dashed")
+
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Summer 2023", y = 32), label = "Impairment", size = 2.5) +
+  geom_text(aes(x = "Summer 2023", y = 42), label = "Attainment", size = 2.5) +
+  geom_text(aes(x = "Summer 2023", y = 52), label = "High-Scoring", size = 2.5)
+```
+
+```{r, warning = FALSE}
+macro_data %>% 
+  ggplot(aes(x = Sample, y = `Index Score`, color = Reach)) +
+  geom_boxplot() +
+  geom_line()+
+  theme_classic() +
+  theme(axis.text.x = element_text(angle=45, hjust = 1)) +
+  labs(y = "Colorado MMI Score",
+       title = "Filtered Data") +
   #geom_vline(aes(xintercept = "Fall 2023"), linetype="dashed")
 
   # labels
@@ -213,7 +239,8 @@ macro_data %>%
   theme_classic() +
   labs(x = element_blank(),
        y = "Colorado MMI",
-       color = element_blank()) +
+       color = element_blank(),
+       title = "Unfiltered Data") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
@@ -228,7 +255,8 @@ macro_data_filtered %>%
   theme_classic() +
   labs(x = element_blank(),
        y = "Colorado MMI",
-       color = element_blank()) +
+       color = element_blank(),
+       title = "Filtered Data") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
@@ -245,7 +273,8 @@ macro_data %>%
   theme_classic() +
   labs(x = element_blank(),
        y = "Colorado MMI",
-       color = element_blank()) +
+       color = element_blank(),
+       title = "Unfiltered Data") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
@@ -260,7 +289,8 @@ macro_data_filtered %>%
   theme_classic() +
   labs(x = element_blank(),
        y = "Colorado MMI",
-       color = element_blank()) +
+       color = element_blank(),
+       title = "Filtered Data") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
@@ -301,7 +331,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -319,7 +350,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 How has richness by feeding traits changed?
@@ -339,7 +371,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -356,7 +389,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 How has richness by habitat traits changed?
@@ -376,7 +410,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -393,7 +428,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 
@@ -414,7 +450,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -431,7 +468,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 # Community Metrics Plots
@@ -452,7 +490,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -469,7 +508,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 # Density Plots
@@ -491,7 +531,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -509,7 +550,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 How has density by feeding traits changed?
@@ -529,7 +571,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -546,7 +589,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 How has density by habitat traits changed?
@@ -566,7 +610,8 @@ macro_data %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -583,7 +628,8 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 How has density of tolerant and intolerant taxa changed?
@@ -602,7 +648,8 @@ macro_data %>%
   facet_wrap(~Metric) +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Unfiltered Data")
 
 macro_data_filtered %>% 
   select(Reach,
@@ -618,7 +665,8 @@ macro_data_filtered %>%
   facet_wrap(~Metric) +
   labs(x = element_blank(),
        y = element_blank(),
-       color = element_blank())
+       color = element_blank(),
+       title = "Filtered Data")
 ```
 
 Filtering out samples from Upstream 1 and from Upstream 2 in Fall 2023 seems to particularly effect the density plots in the direction that we might expect. Stick with the filtered data for now.
@@ -668,6 +716,13 @@ Impact sites had significantly lower MMIs than control sites, however, we do not
 Rerun the analysis with the filtered data.
 
 ```{r warning=FALSE}
+# T test to test for differences in MMI between control and impact reaches before the dam removal. Use alternative = "greater" b/c we hypothesize that MMI is higher in the control (x) reach than the impact (y) reach
+macro_data_filtered %>% 
+  filter(Before_After == "Before") %>% 
+  t.test(`Index Score`~ Control_Impact,
+         data = .,
+         alternative = "greater")
+
 MMI_glmm <- glmmTMB(`Index Score`/100 ~ Before_After * Control_Impact + (1|Reach),
                 data =macro_data_filtered,
                 family = beta_family())
@@ -689,6 +744,7 @@ macro_data_filtered %>%
   geom_text(aes(x = "Impact", y = 46), label = "Unimpaired", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Impact", y = 57), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
 ```
+
 We see a trend in the interaction between Before_After and Control_Impact, indicating that the MMI scores at the impact sites likely improved after the restoration relative to MMI scores at the control sites.
 
 # Richness BACI Test
