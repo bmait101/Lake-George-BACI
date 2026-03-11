@@ -16,13 +16,15 @@ library(data.table)
 library(tidyverse)   # For tidy data management
 library(lubridate)   # For working with dates
 library(glmmTMB)     # For stat tests
+library(cowplot)     # For making gridded plots
+library(vegan)       # For NMDS analysis
 ```
 
 Updates from v2.0: Update plots to compound/multi-panel.
 
 ```{r loadData}
 # specify folder path where results are saved
-loadPath <- "C:/Users/GeorgeValentine/Box/Lake George Dam Removal/Sample Data/Macroinvertebrates/Results from NAMC/LakeGeorge_historical_CO_MMI_Jan_2026.xlsx"
+loadPath <- loadPath <- here::here("data","LakeGeorge_historical_CO_MMI.xlsx")
 
 #----------------------------------------------------------------------------------
 # Load sample data
@@ -50,16 +52,22 @@ macro_sampleData <- macro_sampleData %>%
                             `Collection Date` > '2023-9-1' & `Collection Date` < '2023-12-31' ~ "Fall 2023",
                             `Collection Date` > '2024-5-31' & `Collection Date` < '2024-9-1' ~ "Summer 2024",
                             `Collection Date` > '2024-9-1' & `Collection Date` < '2024-12-31' ~ "Fall 2024",
-                            `Collection Date` > '2025-5-31' & `Collection Date` < '2025-9-1' ~ "Summer 2025",
-                            `Collection Date` > '2025-9-1' & `Collection Date` < '2025-12-31' ~ "Fall 2025"))
+                            `Collection Date` > '2025-5-31' & `Collection Date` < '2025-9-1' ~ "Summer 2025"))
+                            #`Collection Date` > '2025-9-1' & `Collection Date` < '2025-12-31' ~ "Fall 2025"))
 
 macro_sampleData$Sample <- factor(macro_sampleData$Sample,
                                levels = c("Summer 2023",
                                           "Fall 2023",
                                           "Summer 2024",
                                           "Fall 2024",
-                                          "Summer 2025",
-                                          "Fall 2025"))
+                                          "Summer 2025"))
+                                         # "Fall 2025"))
+
+# Add a "Season" variable
+macro_sampleData <- macro_sampleData %>% 
+  mutate(Season = case_when(`Collection Date` < '2023-12-31' ~ 2023,
+                            `Collection Date` > '2023-12-31' & `Collection Date` < '2024-12-31' ~ 2024,
+                            `Collection Date` > '2024-12-31' & `Collection Date` < '2025-12-31' ~ 2025))
 
 # rename and order sites as factor from upstream to downstream
 macro_sampleData <- macro_sampleData %>% 
@@ -131,9 +139,10 @@ macro_sampleData$Community = factor(macro_sampleData$Community,
 
 #----------------------------------------------------------------------------------
 # Load multi-metric index data (CO MMI v5)
-macro_indices <- read_excel(loadPath, sheet = "Index results")
-macro_indices <- macro_indices %>% 
-  filter(`Index name` == "CO Ecological Data Application System Multimetric Index - Transition 2025")
+macro_indices <- read_excel(loadPath, sheet = "Index results - CO_MMI_v5")
+# macro_indices <- read_excel(loadPath, sheet = "Index results")
+# macro_indices <- macro_indices %>% 
+#   filter(`Index Name` == "CO Ecological Data Application System Multimetric Index - Transition 2025")
 
 #----------------------------------------------------------------------------------
 # Load metrics data
@@ -155,17 +164,16 @@ macro_data <- macro_data %>%
 ```
 
 
-# A Note on Filtering Data
-Consider filtering out samples collected in Fall 2023 at Upstream 2 and from all the Upstream 1 samples. The Fall 2023 sample was collected in early December, as soon as researchers had permission to re-enter the restoration site. Construction equipment was still in the river and the area was certainly not in a "post-restoration" state. The Upstream 1 site ended up being slightly upstream of the dam impoundment, and so was not in the area affected by the dam removal. In a sense, it's more like a control reach than an impact reach becuase it didn't recieve the treatment.
+# Filtering Data
+Consider filtering out samples collected in Fall 2023 and from all the Upstream 1 samples. The Fall 2023 sample was collected in early December, as soon as researchers had permission to re-enter the restoration site. Construction equipment was still in the river and the area was certainly not in a "post-restoration" state. The Upstream 1 site ended up being slightly upstream of the dam impoundment, and so was not in the area affected by the dam removal. In a sense, it's more like a control reach than an impact reach because it didn't receive the treatment.
 ```{r}
 macro_data_filtered <- macro_data %>% 
-  filter(`Sample ID` != 215075,
+  filter(Sample != "Fall 2023", #`Sample ID` != 215075,
          Site != "Upstream 1")
 ```
 
-## Data Visualizations
 # MMI
-The Colorado Ecological Data Application System Multimetric Index (MMI) is a bioassessment tool developed by the Colorado Water Quality Control Division with assistance from the US EPA to quantify the health of aquatic ecosystems within the state based on macroinvertebrate assemblages. It uses three Biotypes and assigns a score from 0-100. For more information, see the [Colorado Department of Public Health and the Environment's Policy Statement 10-1](https://www.coloradosmp.org/wp-content/uploads/2022/03/Policy-10-1-v.-2020.pdf), *Aquatic Life Use Attainment: Methodology to Determine Use Attainment for Rivers and Streams*. The study site in Elevenmile Canyon near lake George, CO falls within the *transition* biotype.
+The Colorado Ecological Data Application System Multimetric Index (MMI) is a bioassessment tool developed by the Colorado Water Quality Control Division with assistance from the US EPA to quantify the health of aquatic ecosystems within the state based on macroinvertebrate assemblages. It uses three Biotypes and assigns a score from 0-100. For more information, see the [Colorado Department of Public Health and the Environment's Policy Statement 10-1](https://drive.google.com/file/d/1Hj_ytnBJS2kF7T-e2uY6P1dfEvkEbmVS/view?usp=sharing), *Aquatic Life Use Attainment: Methodology to Determine Use Attainment for Rivers and Streams*. The study site in Elevenmile Canyon near lake George, CO falls within the *transition* biotype.
 
 MMI scores are assessed as follows:
 
@@ -175,12 +183,15 @@ MMI scores are assessed as follows:
 
 How has the MMI score of each site changed over the course of the study?
 ```{r}
-macro_data %>% 
+macro_data%>% 
   ggplot(aes(x = Site, y = `Index Score`, fill = Sample)) +
   geom_bar(stat = 'identity', position = 'dodge') + 
   theme_classic() +
   theme(axis.text.x = element_text(angle=45, hjust = 1)) +
-  labs(title = "Unfiltered Data") +
+  labs(x = "",
+       y = "Colorado MMI Score",
+       fill = "") +
+  coord_cartesian(ylim = c(18,NA)) +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
@@ -198,8 +209,9 @@ macro_data %>%
   theme_classic() +
   theme(axis.text.x = element_text(angle=45, hjust = 1)) +
   facet_wrap(~Site) +
-  labs(y = "Colorado MMI Score",
-       title = "Unfiltered Data") +
+  labs(x = "",
+       y = "Colorado MMI Score",
+       color = "") +
   #geom_vline(aes(xintercept = "Fall 2023"), linetype="dashed")
 
   # labels
@@ -211,24 +223,35 @@ macro_data %>%
   geom_text(aes(x = "Summer 2023", y = 52), label = "High-Scoring", size = 2.5)
 ```
 
-```{r, warning = FALSE}
-macro_data %>% 
-  ggplot(aes(x = Sample, y = `Index Score`, color = Reach)) +
-  geom_boxplot() +
-  geom_line()+
+Consider visualizing MMI change over time. Or choose another metric.
+```{r message=FALSE, warning=FALSE}
+# Create a summary table
+MMI_over_time_stats <- macro_data_filtered %>% 
+  group_by(Reach,
+           Sample) %>% 
+  summarise(Mean_MMI = mean(`Index Score`, na.rm = T),
+            SD = sd(`Index Score`, na.rm = T))
+  
+MMI_over_time_stats %>% 
+  ggplot(aes(x = Sample, y = Mean_MMI, color = Reach, group = Reach)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = Mean_MMI - SD, ymax = Mean_MMI + SD),
+                width=0.2,
+                position=position_dodge(0.05)) +
   theme_classic() +
   theme(axis.text.x = element_text(angle=45, hjust = 1)) +
-  labs(y = "Colorado MMI Score",
-       title = "Filtered Data") +
-  #geom_vline(aes(xintercept = "Fall 2023"), linetype="dashed")
+  labs(x = "",
+       y = "Colorado MMI Score",
+       color = "") +
 
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
   geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Summer 2023", y = 32), label = "Impairment", size = 2.5) +
-  geom_text(aes(x = "Summer 2023", y = 42), label = "Attainment", size = 2.5) +
-  geom_text(aes(x = "Summer 2023", y = 52), label = "High-Scoring", size = 2.5)
+  geom_text(aes(x = "Fall 2025", y = 32), label = "Impairment", size = 2.5, color = "Black", show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 42), label = "Attainment", size = 2.5, color = "Black",show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 52), label = "High-Scoring", size = 2.5, color = "Black",show.legend = F)
 ```
 
 How has the MMI score of each study reach (i.e. control, upstream, downstream) changed over the course of the study?
@@ -237,69 +260,171 @@ macro_data %>%
   ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
   geom_boxplot() +
   theme_classic() +
-  labs(x = element_blank(),
+  labs(x = "",
        y = "Colorado MMI",
-       color = element_blank(),
+       color = "",
        title = "Unfiltered Data") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
   geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Downstream", y = 32), label = "Impaired", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Downstream", y = 44), label = "Unimpaired", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Downstream", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Downstream", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
 
 macro_data_filtered %>% 
   ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
   geom_boxplot() +
   theme_classic() +
-  labs(x = element_blank(),
+  labs(x = "",
        y = "Colorado MMI",
-       color = element_blank(),
+       color = "",
        title = "Filtered Data") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
   geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Downstream", y = 32), label = "Impaired", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Downstream", y = 44), label = "Unimpaired", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Downstream", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Downstream", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
 ```
 
-```{r message=FALSE, warning=FALSE}
-macro_data %>% 
-  ggplot(aes(x = Reach, y = `Index Score`, color = Before_After)) +
+Visualize MMI scores in a combined figure that uses the BACI structure as well as structure by reach
+```{r message=FALSE, warning=FALSE, fig.width=6, fig.height=8}
+a <- macro_data_filtered %>%
+  ggplot(aes(x = Control_Impact, y = `Index Score`, color = Before_After)) +
   geom_boxplot() +
   theme_classic() +
-  labs(x = element_blank(),
+  labs(x = "",
        y = "Colorado MMI",
-       color = element_blank(),
-       title = "Unfiltered Data") +
+       color = "") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
   geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Downstream", y = 32), label = "Impaired", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Downstream", y = 44), label = "Unimpaired", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Impact", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Impact", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Impact", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
+
+b <- macro_data_filtered %>% 
+  ggplot(aes(x = Reach, y = `Index Score`, color = Before_After)) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "",
+       y = "Colorado MMI",
+       color = "") +
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Downstream", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Downstream", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
+
+plot_grid(a, b, nrow = 2, labels = c('a)', 'b)'))
+```
+
+Summary table of MMI values before and after by reach:
+```{r}
+macro_data_filtered %>% 
+  group_by(Before_After, Control_Impact) %>% 
+  summarise(Mean_MMI = round(mean(`Index Score`), 1),
+            Min_MMI = min(`Index Score`),
+            Max_MMI = max(`Index Score`))
 
 macro_data_filtered %>% 
-  ggplot(aes(x = Reach, y = `Index Score`, color = Before_After)) +
+  group_by(Before_After, Reach) %>% 
+  summarise(Mean_MMI = round(mean(`Index Score`), 1),
+            Min_MMI = min(`Index Score`),
+            Max_MMI = max(`Index Score`))
+
+macro_data_filtered %>% 
+  group_by(Before_After, Site) %>% 
+  summarise(Mean_MMI = round(mean(`Index Score`), 1),
+            Min_MMI = min(`Index Score`),
+            Max_MMI = max(`Index Score`))
+
+```
+
+T-Tests to test for differences in means between groups:
+```{r}
+# T test to test for differences in MMI between control and impact reaches before the dam removal. Use alternative = "greater" b/c we hypothesize that MMI is higher in the control (x) reach than the impact (y) reach
+macro_data_filtered %>% 
+  filter(Before_After == "Before") %>% 
+  t.test(`Index Score`~ Control_Impact,
+         data = .,
+         alternative = "greater")
+
+# Did MMI change significantly in the control reach? We have no alternative
+macro_data_filtered %>% 
+  filter(Control_Impact == "Control") %>% 
+  t.test(`Index Score`~ Before_After,
+         data = .)
+
+# Did MMI change significantly in the impact reaches? use alternative "less" because we hypothesize that MMI will be lower before (x) than after (y)
+macro_data_filtered %>% 
+  filter(Control_Impact == "Impact") %>% 
+  t.test(`Index Score`~ Before_After,
+         data = .,
+         alternative = "less")
+
+# Did MMI change significantly in the Upstream reach? use alternative "less" because we hypothesize that MMI will be lower before (x) than after (y)
+macro_data_filtered %>% 
+  filter(Reach == "Upstream") %>% 
+  t.test(`Index Score`~ Before_After,
+         data = .,
+         alternative = "less")
+
+# Did MMI change significantly in the Downstream reach? use alternative "less" because we hypothesize that MMI will be lower before (x) than after (y)
+macro_data_filtered %>% 
+  filter(Reach == "Downstream") %>% 
+  t.test(`Index Score`~ Before_After,
+         data = .,
+         alternative = "less")
+```
+
+Plot of each transect by Before/After:
+```{r message=TRUE, warning=FALSE}
+macro_data_filtered %>% 
+  ggplot(aes(x = Site, y = `Index Score`, color = Before_After)) +
   geom_boxplot() +
   theme_classic() +
-  labs(x = element_blank(),
+  theme(axis.text.x = element_text(angle=45, hjust = 1)) +
+  labs(x = "",
        y = "Colorado MMI",
-       color = element_blank(),
-       title = "Filtered Data") +
+       color = "") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
   geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Downstream", y = 32), label = "Impaired", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Downstream", y = 44), label = "Unimpaired", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
+  geom_text(aes(x = "Control 1", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Control 1", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Control 1", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
 ```
 
+
+## MMI BACI Test
+Does MMI differ between control and impact reaches? Is so, does the difference persist after the restoration? This is a test of the BACI design, and we are looking at the interaction between control/impact and before/after. We also a include a random effect for Reach (the variable for control/upstream/downstream) because we are looking to extrapolate to those whole reaches, not just the sampled transects.
+
+First, check response variable for normality:
+
+```{r}
+qqnorm(macro_data_filtered$`Index Score`)
+qqline(macro_data_filtered$`Index Score`)
+hist(macro_data_filtered$`Index Score`)
+```
+
+Yes - MMI data are normally distributed. We can proceed with a GLMM with a random effect for reach. We use a beta distribution (support 0-1) to model MMI, which is divided by 100.
+
+```{r warning=FALSE}
+MMI_glmm <- glmmTMB(`Index Score`/100 ~ Before_After * Control_Impact + (1|Reach),
+                data =macro_data_filtered,
+                family = beta_family())
+
+summary(MMI_glmm)
+```
+
+We see a trend in the interaction between Before_After and Control_Impact, indicating that the MMI scores at the impact sites likely improved after the restoration relative to MMI scores at the control sites.
 
 What about the sites with MMI scores that fall between impairment and attainment? The CO MMI v5 update includes auxiliary thresholds for this determination based off of the Hilsenhoff Biotic Index and the Shannon Diversity Index:
 
@@ -329,9 +454,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -348,10 +473,26 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
+```
+
+Zoom in on unique richness and show change over time. Summarize by year because richness can change throughout the season.
+```{r message=FALSE}
+macro_data_filtered %>% 
+  group_by(Site,
+           Reach,
+           Season) %>% 
+  summarise(Mean_Richness = mean(`Unique Richness`, na.rm = T)) %>% 
+  ggplot(aes(x = Reach, y = Mean_Richness, color = as.factor(Season))) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "",
+       y = "",
+       color = "",
+       title = "Unique Richness")
 ```
 
 How has richness by feeding traits changed?
@@ -369,9 +510,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -387,9 +528,9 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
 
@@ -408,9 +549,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -426,9 +567,9 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
 
@@ -448,9 +589,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -466,9 +607,9 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
 
@@ -488,9 +629,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -506,9 +647,9 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
 
@@ -529,9 +670,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -548,11 +689,41 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
+
+Zoom in on overall and EPT density and show change over time. Summarize by year because density can change throughout the season.
+```{r}
+macro_data_filtered %>% 
+  group_by(Site,
+           Reach,
+           Season) %>% 
+  summarise(Mean_Density = mean(Density, na.rm = T)) %>% 
+  ggplot(aes(x = Reach, y = log(Mean_Density), color = as.factor(Season))) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "",
+       y = "log Density (inds/m^2)",
+       color = "",
+       title = "Overall Density")
+
+macro_data_filtered %>% 
+  group_by(Site,
+           Reach,
+           Season) %>% 
+  summarise(Mean_Density_EPTs = mean(`Density - EPT`, na.rm = T)) %>% 
+  ggplot(aes(x = Reach, y = log(`Mean_Density_EPTs`), color = as.factor(Season))) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "",
+       y = "log Density (inds/m^2)",
+       color = "",
+       title = "EPT Density")
+```
+
 
 How has density by feeding traits changed?
 ```{r fig.width = 14, fig.height = 10}
@@ -569,9 +740,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -587,9 +758,9 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
 
@@ -608,9 +779,9 @@ macro_data %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -626,9 +797,9 @@ macro_data_filtered %>%
   theme_classic() +
   facet_wrap(~Metric,
              scales = "free_y") +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
 
@@ -646,9 +817,9 @@ macro_data %>%
   geom_boxplot() +
   theme_classic() +
   facet_wrap(~Metric) +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Unfiltered Data")
 
 macro_data_filtered %>% 
@@ -663,9 +834,9 @@ macro_data_filtered %>%
   geom_boxplot() +
   theme_classic() +
   facet_wrap(~Metric) +
-  labs(x = element_blank(),
-       y = element_blank(),
-       color = element_blank(),
+  labs(x = "",
+       y = "",
+       color = "",
        title = "Filtered Data")
 ```
 
@@ -675,77 +846,6 @@ Although year is not a response variable, we also don't expect an immediate impr
 
 
 ## Stats
-# MMI BACI Test
-Does MMI differ between control and impact reaches? Is so, does the difference persist after the restoration? This is a test of the BACI design, and we are looking at the interaction between control/impact and before/after. We also a include a random effect for Reach (the variable for control/upstream/downstream) because we are looking to extrapolate to those whole reaches, not just the sampled transects.
-
-First, check response variable for normality:
-
-```{r}
-qqnorm(macro_data_filtered$`Index Score`)
-qqline(macro_data_filtered$`Index Score`)
-hist(macro_data_filtered$`Index Score`)
-```
-
-Yes - MMI data are normally distributed. We can proceed with a GLMM with a random effect for reach. We use a beta distribution (support 0-1) to model MMI, which is divided by 100.
-
-```{r warning=F}
-MMI_glmm <- glmmTMB(`Index Score`/100 ~ Before_After * Control_Impact + (1|Reach),
-                data = macro_data,
-                family = beta_family())
-
-summary(MMI_glmm)
-
-macro_data %>% 
-  ggplot(aes(x = Control_Impact, y = `Index Score`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  labs(x = element_blank(),
-       y = "Colorado MMI",
-       color = element_blank())
-  # labels
-  # geom_hline(aes(yintercept = 34), linetype="dashed") +
-  # geom_hline(aes(yintercept = 45), linetype="dashed") +
-  # geom_hline(aes(yintercept = 56), linetype="dashed") +
-  # geom_text(aes(x = "Impact", y = 33.5), label = "Impaired", size = 3, color = "black", nudge_x = 0.4) +
-  # geom_text(aes(x = "Impact", y = 46), label = "Unimpaired", size = 3, color = "black", nudge_x = 0.4) +
-  # geom_text(aes(x = "Impact", y = 57), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
-```
-
-Impact sites had significantly lower MMIs than control sites, however, we do not see a significant interaction between control/impact and before/after. We suspect that this lack of an effect is because the Upstream 1 site was a bit outside of the dam impoundment area and thus was an outlier with a high MMI score before the dam removal and restoration.
-
-Rerun the analysis with the filtered data.
-
-```{r warning=FALSE}
-# T test to test for differences in MMI between control and impact reaches before the dam removal. Use alternative = "greater" b/c we hypothesize that MMI is higher in the control (x) reach than the impact (y) reach
-macro_data_filtered %>% 
-  filter(Before_After == "Before") %>% 
-  t.test(`Index Score`~ Control_Impact,
-         data = .,
-         alternative = "greater")
-
-MMI_glmm <- glmmTMB(`Index Score`/100 ~ Before_After * Control_Impact + (1|Reach),
-                data =macro_data_filtered,
-                family = beta_family())
-
-summary(MMI_glmm)
-
-macro_data_filtered %>%
-  ggplot(aes(x = Control_Impact, y = `Index Score`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  labs(x = element_blank(),
-       y = "Colorado MMI",
-       color = element_blank()) +
-  # labels
-  geom_hline(aes(yintercept = 34), linetype="dashed") +
-  geom_hline(aes(yintercept = 45), linetype="dashed") +
-  geom_hline(aes(yintercept = 56), linetype="dashed") +
-  geom_text(aes(x = "Impact", y = 33.5), label = "Impaired", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Impact", y = 46), label = "Unimpaired", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Impact", y = 57), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
-```
-
-We see a trend in the interaction between Before_After and Control_Impact, indicating that the MMI scores at the impact sites likely improved after the restoration relative to MMI scores at the control sites.
 
 # Richness BACI Test
 Does richness differ between control and impact reaches? Is so, does the difference persist after the restoration? Again, this is a test of the BACI design, and we are looking at the interaction between control/impact and before/after. Continue using the filtered data for now.
@@ -773,7 +873,10 @@ summary(richness_glmm)
 macro_data_filtered %>% 
   ggplot(aes(x = Control_Impact, y = `Unique Richness`, color = Before_After)) +
   geom_boxplot() +
-  theme_classic()
+  theme_classic() +
+  labs(x = "",
+       y = "Unique Richness",
+       color = "")
 ```
 A significant interaction between Before_After and Control_Impact indicates that overall richness at the impact sites significantly improved after the restoration relative to the control sites.
 
@@ -802,7 +905,10 @@ summary(EPT_richness_glmm)
 macro_data_filtered %>% 
   ggplot(aes(x = Control_Impact, y = `Unique Richness - EPT`, color = Before_After)) +
   geom_boxplot() +
-  theme_classic()
+  theme_classic() +
+  labs(x = "",
+       y = "Unique Richness - EPTs",
+       color = "")
 ```
 Richness of EPTs did not significantly increase in the impact reaches after the restoration relative to the control reaches.
 
@@ -833,7 +939,7 @@ macro_data_filtered %>%
   geom_boxplot() +
   theme_classic() +
   labs(y = "(Log) Density (inds/m^2)",
-       color = element_blank())
+       color = "")
 ```
 A significant interaction between Before_After and Control_Impact indicates that overall density at the impact sites significantly improved after the restoration relative to the control sites.
 
@@ -898,19 +1004,18 @@ macro_data_filtered %>%
 A trend. Shannon's diversity slightly increased at the impact reaches relative to the control reach.
 
 # Non-Metric Multi Dimensional Scaling (NMDS)
- NMDS is a method that allows us to consolidate multidimensional data (in our case, many OTUs) into a 2D representation of community structure and/or change between communities. In our case, in addition to treating Control, Upstream, and Downstream as separate communities, we also treat the Before and After states of these reaches as separate communities.
+ NMDS is a method that allows us to consolidate multidimensional data (in our case, many OTUs) into a 2D or 3D representation of community structure and/or change between communities. In our case, in addition to treating Control, Upstream, and Downstream as separate communities, we also treat the Before and After states of these reaches as separate communities.
  
  More info and further instructions at [https://jonlefcheck.net/2012/10/24/nmds-tutorial-in-r/] and [https://jkzorz.github.io/2019/06/06/NMDS.html] and [https://library.virginia.edu/data/articles/starting-non-metric-multidimensional-scaling-nmds].
  
 ```{r NMDS, message=FALSE}
-#install.packages("vegan")
-library(vegan)
 set.seed(1234) # set seed to ensure reproduceable results
 
 # Load the OTU matrix that has been helpfully provided for us
+loadPath <- loadPath <- here::here("data","LakeGeorge_historical_CO_MMI.xlsx") # delete this line later
 macro_taxaMatrix <- read_excel(loadPath,sheet = "Taxa matrix")
 
-# the metaMDS tool in the "Vegan" package requires a matrix object with species/taxa/OTUs as columns communities as rows
+# the metaMDS tool in the "Vegan" package requires a matrix object with species/taxa/OTUs as columns and communities as rows
 # we must first transpose the dataframe and then convert to a matrix
 colnames <- macro_taxaMatrix$`OTU Name`
 macro_taxaMatrix <- as.data.frame(t(macro_taxaMatrix)[-1,])
@@ -918,7 +1023,7 @@ colnames(macro_taxaMatrix) <- colnames
 macro_taxaMatrix <- macro_taxaMatrix %>% 
   mutate_if(is.character, as.numeric)
 
-# Filter out sample IDs that correspond to Upstream 1 and Upstream 2 in Fall 2023 - the ones that we are filtering out.
+# Filter out sample IDs that correspond to Upstream 1 and Fall 2023 - the ones that we are filtering out.
 filter_samples <- macro_sampleData %>% 
     filter(`Sample ID` == 215075 | Site == "Upstream 1") %>% 
   select(`Sample ID`)
@@ -929,6 +1034,7 @@ macro_taxaMatrix <- macro_taxaMatrix[!rownames(macro_taxaMatrix) %in% filter_sam
 # convert to matrix
 macro_taxaMatrix.m <- as.matrix(macro_taxaMatrix)
 
+# Calculate nmds
 macro_nmds <- metaMDS(macro_taxaMatrix.m, tidy = T) # uses defaults of 2 dimensions and Bray-Curtis distances
 macro_nmds # increasing to 3 dimensions lowers our stress value. Make this change if needed.
 stressplot(macro_nmds)
@@ -1084,3 +1190,43 @@ ggplot() +
   theme_classic()
 ```
 The stress value improves slightly over that of the abundance NMDS. But it's very small. Is it worth doing this? Or should I stick with the abundance NMDS plot?
+
+Combine both NMDS plots into one compound figure
+```{r message=FALSE, warning=FALSE, fig.width=6, fig.height=8}
+a <- ggplot() +
+  # plot communities
+  geom_point(data = nmds_communityScores,
+             aes(x = NMDS1, y = NMDS2, colour = Reach)) +
+  # plot hulls
+  geom_polygon(data = nmds_communityHulls,
+               aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+               alpha = 0.3) +
+  # plot centroids
+  geom_point(data = nmds_communityCentroids,
+             aes(x = axis1, y = axis2, color = Reach, shape = Before_After),
+             size = 5) +
+  scale_shape_manual(values=c(66, 65)) +
+  labs(shape = "",
+       title = "Abundance") +
+  theme_classic()
+
+b <- ggplot() +
+  # plot communities
+  geom_point(data = nmds_PA_communityScores,
+             aes(x = NMDS1, y = NMDS2, colour = Reach)) +
+  # plot hulls
+  geom_polygon(data = nmds_PA_communityHulls,
+               aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+               alpha = 0.3) +
+  # plot centroids
+  geom_point(data = nmds_PA_communityCentroids,
+             aes(x = axis1, y = axis2, color = Reach, shape = Before_After),
+             size = 5) +
+  scale_shape_manual(values=c(66, 65)) +
+  labs(shape = "",
+       title = "Presence/Absence") +
+  theme_classic()
+
+plot_grid(a, b, nrow = 2, labels = c('A', 'B'))
+```
+
