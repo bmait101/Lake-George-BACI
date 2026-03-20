@@ -10,7 +10,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 # Load libraries
-library(here)        # For relative file paths
 library(readxl)      # For reading in Excel files
 library(data.table)
 library(tidyverse)   # For tidy data management
@@ -18,6 +17,7 @@ library(lubridate)   # For working with dates
 library(glmmTMB)     # For stat tests
 library(cowplot)     # For making gridded plots
 library(vegan)       # For NMDS analysis
+library(here)        # For relative file paths
 ```
 
 Updates from v2.0: Update plots to compound/multi-panel.
@@ -183,7 +183,7 @@ MMI scores are assessed as follows:
 
 How has the MMI score of each site changed over the course of the study?
 ```{r}
-macro_data%>% 
+macro_data_filtered %>% 
   ggplot(aes(x = Site, y = `Index Score`, fill = Sample)) +
   geom_bar(stat = 'identity', position = 'dodge') + 
   theme_classic() +
@@ -202,7 +202,7 @@ macro_data%>%
 ```
 
 ```{r, warning = FALSE}
-macro_data %>% 
+macro_data_filtered %>% 
   ggplot(aes(x = Sample, y = `Index Score`, group = 1)) +
   geom_line() + 
   geom_point() +
@@ -256,21 +256,8 @@ MMI_over_time_stats %>%
 
 How has the MMI score of each study reach (i.e. control, upstream, downstream) changed over the course of the study?
 ```{r message=FALSE, warning=FALSE}
-macro_data %>% 
-  ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
-  geom_boxplot() +
-  theme_classic() +
-  labs(x = "",
-       y = "Colorado MMI",
-       color = "",
-       title = "Unfiltered Data") +
-  # labels
-  geom_hline(aes(yintercept = 33), linetype="dashed") +
-  geom_hline(aes(yintercept = 43), linetype="dashed") +
-  geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Downstream", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Downstream", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
-  geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
+# save a color palette
+ibm_palette <- c("#ffb000", "#fe6100","#dc267f","#785ef0","#648fff")
 
 macro_data_filtered %>% 
   ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
@@ -287,6 +274,32 @@ macro_data_filtered %>%
   geom_text(aes(x = "Downstream", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
+
+# plot for Charlie's Lake George tour presentation
+macro_data_filtered %>%
+  ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
+  geom_boxplot() +
+  stat_boxplot(geom = "errorbar") +
+  theme_classic() +
+  scale_color_manual(values = ibm_palette) +
+  labs(x = "",
+       y = "Colorado MMI",
+       color = "") +
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Control", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = -0.3) +
+  geom_text(aes(x = "Control", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = -0.3) +
+  geom_text(aes(x = "Control", y = 54), label = "High-scoring", size = 3, color = "black", nudge_x = -0.26)
+
+# save plot if necessary
+ggsave(filename = "LakeGeorge_MMIplot_3.12.2026.png",
+       width = 7,
+       height = 5,
+       scale = 0.8,
+       units = "in",
+       dpi = 600)
 ```
 
 Visualize MMI scores in a combined figure that uses the BACI structure as well as structure by reach
@@ -431,7 +444,7 @@ What about the sites with MMI scores that fall between impairment and attainment
 ![Table 2 from Policy 10-1](../imgs/CO MMI v5 Auxiliary Metric Thresholds table.png)
 
 ```{r, warning = FALSE}
-macro_data %>% select(Site, Sample,`Index Score`, Condition, `Unique Hilsenhoff`, `Unique Shannons`) %>% 
+macro_data_filtered %>% select(Site, Sample,`Index Score`, Condition, `Unique Hilsenhoff`, `Unique Shannons`) %>% 
   filter(Condition == "Inconclusive") %>% 
   mutate(Auxiliary = ifelse(`Unique Hilsenhoff` < 5.6 & `Unique Shannons` > 2.6, "Attainment", "Impairment"))
 ```
@@ -440,25 +453,6 @@ These are all close, but their values don't quite meet the cutoff for Attainment
 # Richness Plots
 How has overall and taxon-specific richness changed?
 ```{r fig.width = 14, fig.height = 10}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Unique Richness`:`Unique Richness - Mollusca`,
-         `Unique Richness - EPT`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -475,8 +469,7 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 Zoom in on unique richness and show change over time. Summarize by year because richness can change throughout the season.
@@ -497,24 +490,6 @@ macro_data_filtered %>%
 
 How has richness by feeding traits changed?
 ```{r fig.width = 14, fig.height = 10}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Unique Richness - Feed_Collector-Filterer`:`Unique Richness - Feed_Piercer-Herbivore`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -530,30 +505,11 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 How has richness by habitat traits changed?
 ```{r fig.width = 14, fig.height = 10}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Unique Richness - Habit_Clinger`:`Unique Richness - Habit_Sprawler`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -569,31 +525,12 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 
 How has richness of long-lived, tolerant and intolerant taxa changed?
 ```{r fig.width = 14, fig.height = 4}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Unique Richness - Long-Lived Taxa`:`Unique Richness - Tolerant Taxa`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -609,31 +546,12 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 # Community Metrics Plots
 How have metrics such as Hilsenhoff's index, diversity, evenness, and relative abundance changed?
 ```{r fig.width = 14, fig.height = 8}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Unique Hilsenhoff`:`Unique Dominant Taxon Relative Abundance`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -649,32 +567,12 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 # Density Plots
 How has overall and taxon-specific density changed?
 ```{r fig.width = 14, fig.height = 10}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         Density:`Density - Mollusca`,
-         `Density - EPT`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -691,22 +589,21 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 Zoom in on overall and EPT density and show change over time. Summarize by year because density can change throughout the season.
-```{r}
+```{r message=FALSE}
 macro_data_filtered %>% 
   group_by(Site,
            Reach,
            Season) %>% 
   summarise(Mean_Density = mean(Density, na.rm = T)) %>% 
-  ggplot(aes(x = Reach, y = log(Mean_Density), color = as.factor(Season))) +
+  ggplot(aes(x = Reach, y = Mean_Density, color = as.factor(Season))) +
   geom_boxplot() +
   theme_classic() +
   labs(x = "",
-       y = "log Density (inds/m^2)",
+       y = "Density (inds/m^2)",
        color = "",
        title = "Overall Density")
 
@@ -715,11 +612,11 @@ macro_data_filtered %>%
            Reach,
            Season) %>% 
   summarise(Mean_Density_EPTs = mean(`Density - EPT`, na.rm = T)) %>% 
-  ggplot(aes(x = Reach, y = log(`Mean_Density_EPTs`), color = as.factor(Season))) +
+  ggplot(aes(x = Reach, y = `Mean_Density_EPTs`, color = as.factor(Season))) +
   geom_boxplot() +
   theme_classic() +
   labs(x = "",
-       y = "log Density (inds/m^2)",
+       y = "Density (inds/m^2)",
        color = "",
        title = "EPT Density")
 ```
@@ -727,24 +624,6 @@ macro_data_filtered %>%
 
 How has density by feeding traits changed?
 ```{r fig.width = 14, fig.height = 10}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Density - Feed_Collector-Filterer`:`Density - Feed_Piercer-Herbivore`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -760,30 +639,11 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 How has density by habitat traits changed?
 ```{r fig.width = 14, fig.height = 10}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Density - Habit_Clinger`:`Density - Habit_Sprawler`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric,
-             scales = "free_y") +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -799,29 +659,11 @@ macro_data_filtered %>%
              scales = "free_y") +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 How has density of tolerant and intolerant taxa changed?
 ```{r fig.width = 10, fig.height = 4}
-macro_data %>% 
-  select(Reach,
-         Before_After,
-         `Density - Intolerant Taxa`:`Density - Tolerant Taxa`) %>% 
-  pivot_longer(
-    cols = 3:ncol(.),
-    names_to = "Metric",
-    values_to = "Value") %>% 
-  ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  facet_wrap(~Metric) +
-  labs(x = "",
-       y = "",
-       color = "",
-       title = "Unfiltered Data")
-
 macro_data_filtered %>% 
   select(Reach,
          Before_After,
@@ -836,8 +678,7 @@ macro_data_filtered %>%
   facet_wrap(~Metric) +
   labs(x = "",
        y = "",
-       color = "",
-       title = "Filtered Data")
+       color = "")
 ```
 
 Filtering out samples from Upstream 1 and from Upstream 2 in Fall 2023 seems to particularly effect the density plots in the direction that we might expect. Stick with the filtered data for now.
@@ -1025,7 +866,7 @@ macro_taxaMatrix <- macro_taxaMatrix %>%
 
 # Filter out sample IDs that correspond to Upstream 1 and Fall 2023 - the ones that we are filtering out.
 filter_samples <- macro_sampleData %>% 
-    filter(`Sample ID` == 215075 | Site == "Upstream 1") %>% 
+    filter(Sample != "Fall 2023" | Site == "Upstream 1") %>% 
   select(`Sample ID`)
   
 macro_taxaMatrix <- macro_taxaMatrix[!rownames(macro_taxaMatrix) %in% filter_samples$`Sample ID`,]
@@ -1075,6 +916,33 @@ ggplot() +
   scale_shape_manual(values=c(66, 65)) +
   labs(shape = "") +
   theme_classic()
+
+# plot settings for Charlie's field trip presentation:
+ggplot() +
+  # plot communities
+  geom_point(data = nmds_communityScores,
+             aes(x = NMDS1, y = NMDS2, color = Reach)) +
+  # plot hulls
+  geom_polygon(data = nmds_communityHulls,
+               aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+               alpha = 0.3) +
+  # plot centroids
+  geom_point(data = nmds_communityCentroids,
+             aes(x = axis1, y = axis2, color = Reach, shape = Before_After),
+             size = 5) +
+  scale_shape_manual(values=c(66, 65)) +
+  labs(shape = "") +
+  theme_classic() +
+  scale_fill_manual(values = ibm_palette[c(1,3,5)]) +
+  scale_color_manual(values = ibm_palette[c(1,3,5)])
+
+# Save plot
+ggsave(filename = "LakeGeorge_NMDSplot_3.12.2026.png",
+       width = 7,
+       height = 5,
+       scale = 0.8,
+       units = "in",
+       dpi = 600)
 ```
  
  Did the control reaches significantly change?
