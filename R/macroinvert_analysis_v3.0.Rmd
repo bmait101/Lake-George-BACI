@@ -18,6 +18,9 @@ library(glmmTMB)     # For stat tests
 library(cowplot)     # For making gridded plots
 library(vegan)       # For NMDS analysis
 library(here)        # For relative file paths
+library(ggpattern)   # For using patterns in ggplot2
+library(goeveg)      # For checking how many NMDS dimensions are required
+library(ggforce)     # For plotting hulls on NMDS plots
 ```
 
 Updates from v2.0: Update plots to compound/multi-panel.
@@ -201,7 +204,7 @@ macro_data_filtered %>%
   geom_text(aes(x = "Downstream 3", y = 52), label = "High-Scoring", size = 3)
 ```
 
-```{r, warning = FALSE}
+```{r message=FALSE, warning=FALSE}
 macro_data_filtered %>% 
   ggplot(aes(x = Sample, y = `Index Score`, group = 1)) +
   geom_line() + 
@@ -223,28 +226,41 @@ macro_data_filtered %>%
   geom_text(aes(x = "Summer 2023", y = 52), label = "High-Scoring", size = 2.5)
 ```
 
-Consider visualizing MMI change over time. Or choose another metric.
-```{r message=FALSE, warning=FALSE}
+Visualize MMI, richness, and EPT change over time in a compound line plot. Summarize richness and density by year because they can vary seasonally.
+```{r fig.height=10, fig.width=7, message=FALSE, warning=FALSE}
 # Create a summary table
-MMI_over_time_stats <- macro_data_filtered %>% 
+stats_over_time_Sample <- macro_data_filtered %>% 
   group_by(Reach,
            Sample) %>% 
   summarise(Mean_MMI = mean(`Index Score`, na.rm = T),
-            SD = sd(`Index Score`, na.rm = T))
+            SD_MMI = sd(`Index Score`, na.rm = T),
+            Mean_Richness = mean(`Unique Richness`, na.rm = T),
+            SD_Richness = sd(`Unique Richness`, na.rm = T),
+            Mean_EPT_Density = mean(`Density - EPT`, na.rm = T),
+            SD_EPT_Density = sd(`Density - EPT`, na.rm = T))
+
+stats_over_time_Season <- macro_data_filtered %>% 
+  group_by(Reach,
+           Season = as.factor(Season)) %>% 
+  summarise(Mean_MMI = mean(`Index Score`, na.rm = T),
+            SD_MMI = sd(`Index Score`, na.rm = T),
+            Mean_Richness = mean(`Unique Richness`, na.rm = T),
+            SD_Richness = sd(`Unique Richness`, na.rm = T),
+            Mean_EPT_Density = mean(`Density - EPT`, na.rm = T),
+            SD_EPT_Density = sd(`Density - EPT`, na.rm = T))
   
-MMI_over_time_stats %>% 
+a <- stats_over_time_Sample %>% 
   ggplot(aes(x = Sample, y = Mean_MMI, color = Reach, group = Reach)) +
   geom_point() +
   geom_line() +
-  geom_errorbar(aes(ymin = Mean_MMI - SD, ymax = Mean_MMI + SD),
+  geom_errorbar(aes(ymin = Mean_MMI - SD_MMI, ymax = Mean_MMI + SD_MMI),
                 width=0.2,
                 position=position_dodge(0.05)) +
   theme_classic() +
-  theme(axis.text.x = element_text(angle=45, hjust = 1)) +
   labs(x = "",
        y = "Colorado MMI Score",
        color = "") +
-
+  
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
@@ -252,12 +268,70 @@ MMI_over_time_stats %>%
   geom_text(aes(x = "Fall 2025", y = 32), label = "Impairment", size = 2.5, color = "Black", show.legend = F) +
   geom_text(aes(x = "Fall 2025", y = 42), label = "Attainment", size = 2.5, color = "Black",show.legend = F) +
   geom_text(aes(x = "Fall 2025", y = 52), label = "High-Scoring", size = 2.5, color = "Black",show.legend = F)
+
+b <- stats_over_time_Season %>% 
+  ggplot(aes(x = Season, y = Mean_Richness, color = Reach, group = Reach)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = Mean_Richness - SD_Richness, ymax = Mean_Richness + SD_Richness),
+                width=0.2,
+                position=position_dodge(0.05)) +
+  theme_classic() +
+  labs(x = "",
+       y = "Taxa Richness",
+       color = "")
+
+c <- stats_over_time_Season %>% 
+  ggplot(aes(x = Season, y = Mean_EPT_Density, color = Reach, group = Reach)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = Mean_EPT_Density - SD_EPT_Density, ymax = Mean_EPT_Density + SD_EPT_Density),
+                width=0.2,
+                position=position_dodge(0.05)) +
+  theme_classic() +
+  labs(x = "",
+       y = "EPT Density (Inds/m^2)",
+       color = "")
+
+plot_grid(a, b, c, nrow = 3, labels = c('a)', 'b)', 'c)'))
 ```
+
+
+```{r}
+# Make a grayscale version of the MMI over time plot for Charlie's Lake George fieldtrip
+stats_over_time_Sample %>% 
+  ggplot(aes(x = Sample, y = Mean_MMI, group = Reach)) +
+  geom_point() +
+  geom_line(aes(linetype = Reach)) +
+  geom_errorbar(aes(ymin = Mean_MMI - SD_MMI, ymax = Mean_MMI + SD_MMI),
+                width=0.2,
+                position=position_dodge(0.05)) +
+  theme_classic() +
+  labs(x = "",
+       y = "Colorado MMI Score") +
+  
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Fall 2025", y = 32), label = "Impairment", size = 2.5, color = "Black", show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 42), label = "Attainment", size = 2.5, color = "Black",show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 52), label = "High-Scoring", size = 2.5, color = "Black",show.legend = F)
+
+#save plot
+# ggsave(filename = "LakeGeorge_BW_MMIlinePlot_4.10.2026.png",
+#        width = 7,
+#        height = 5,
+#        scale = 0.8,
+#        units = "in",
+#        dpi = 600)
+```
+
 
 How has the MMI score of each study reach (i.e. control, upstream, downstream) changed over the course of the study?
 ```{r message=FALSE, warning=FALSE}
 # save a color palette
-ibm_palette <- c("#ffb000", "#fe6100","#dc267f","#785ef0","#648fff")
+#ibm_palette <- c("#ffb000", "#fe6100","#dc267f","#785ef0","#648fff")
 
 macro_data_filtered %>% 
   ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
@@ -265,8 +339,7 @@ macro_data_filtered %>%
   theme_classic() +
   labs(x = "",
        y = "Colorado MMI",
-       color = "",
-       title = "Filtered Data") +
+       color = "") +
   # labels
   geom_hline(aes(yintercept = 33), linetype="dashed") +
   geom_hline(aes(yintercept = 43), linetype="dashed") +
@@ -275,13 +348,14 @@ macro_data_filtered %>%
   geom_text(aes(x = "Downstream", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
 
-# plot for Charlie's Lake George tour presentation
+# grayscale version of plot for Charlie's Lake George tour presentation
 macro_data_filtered %>%
   ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
-  geom_boxplot() +
   stat_boxplot(geom = "errorbar") +
+  geom_boxplot(fill = "white") +
   theme_classic() +
-  scale_color_manual(values = ibm_palette) +
+  scale_color_grey() +
+  #scale_color_manual(values = ibm_palette) +
   labs(x = "",
        y = "Colorado MMI",
        color = "") +
@@ -293,13 +367,32 @@ macro_data_filtered %>%
   geom_text(aes(x = "Control", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = -0.3) +
   geom_text(aes(x = "Control", y = 54), label = "High-scoring", size = 3, color = "black", nudge_x = -0.26)
 
-# save plot if necessary
-ggsave(filename = "LakeGeorge_MMIplot_3.12.2026.png",
-       width = 7,
-       height = 5,
-       scale = 0.8,
-       units = "in",
-       dpi = 600)
+# and a grayscale version of the line plot
+macro_data_filtered %>%
+  ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
+  stat_boxplot(geom = "errorbar") +
+  geom_boxplot(fill = "white") +
+  theme_classic() +
+  scale_color_grey() +
+  #scale_color_manual(values = ibm_palette) +
+  labs(x = "",
+       y = "Colorado MMI",
+       color = "") +
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Control", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = -0.3) +
+  geom_text(aes(x = "Control", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = -0.3) +
+  geom_text(aes(x = "Control", y = 54), label = "High-scoring", size = 3, color = "black", nudge_x = -0.26)
+
+#save plot if necessary
+# ggsave(filename = "LakeGeorge_BW_MMIboxplot_4.10.2026.png",
+#        width = 7,
+#        height = 5,
+#        scale = 0.8,
+#        units = "in",
+#        dpi = 600)
 ```
 
 Visualize MMI scores in a combined figure that uses the BACI structure as well as structure by reach
@@ -338,7 +431,7 @@ plot_grid(a, b, nrow = 2, labels = c('a)', 'b)'))
 ```
 
 Summary table of MMI values before and after by reach:
-```{r}
+```{r message=FALSE}
 macro_data_filtered %>% 
   group_by(Before_After, Control_Impact) %>% 
   summarise(Mean_MMI = round(mean(`Index Score`), 1),
@@ -357,9 +450,16 @@ macro_data_filtered %>%
             Min_MMI = min(`Index Score`),
             Max_MMI = max(`Index Score`))
 
+macro_data_filtered %>% 
+  group_by(Sample, Reach) %>% 
+  summarise(Mean_MMI = round(mean(`Index Score`), 1),
+            Min_MMI = min(`Index Score`),
+            Max_MMI = max(`Index Score`))
+
 ```
 
-T-Tests to test for differences in means between groups:
+
+T-Tests to test for differences in MMI means between groups:
 ```{r}
 # T test to test for differences in MMI between control and impact reaches before the dam removal. Use alternative = "greater" b/c we hypothesize that MMI is higher in the control (x) reach than the impact (y) reach
 macro_data_filtered %>% 
@@ -394,6 +494,17 @@ macro_data_filtered %>%
   t.test(`Index Score`~ Before_After,
          data = .,
          alternative = "less")
+
+# Are post-removal (After) MMI values in the Downstream reach significantly different than in Control 3? We have no alternative hypothesis
+x <- macro_data_filtered %>% 
+  filter(Site == "Control 3",
+         Before_After == "After")
+
+y <- macro_data_filtered %>% 
+  filter(Reach == "Downstream",
+         Before_After == "After")
+
+t.test(x$`Index Score`, y$`Index Score`)
 ```
 
 Plot of each transect by Before/After:
@@ -417,7 +528,7 @@ macro_data_filtered %>%
 
 
 ## MMI BACI Test
-Does MMI differ between control and impact reaches? Is so, does the difference persist after the restoration? This is a test of the BACI design, and we are looking at the interaction between control/impact and before/after. We also a include a random effect for Reach (the variable for control/upstream/downstream) because we are looking to extrapolate to those whole reaches, not just the sampled transects.
+Does MMI differ between control and impact reaches? If so, does the difference persist after the restoration? This is a test of the BACI design, and we are looking at the interaction between control/impact and before/after. We also a include a random effect for Reach (the variable for control/upstream/downstream) because we are looking to extrapolate to those whole reaches, not just the sampled transects.
 
 First, check response variable for normality:
 
@@ -431,7 +542,7 @@ Yes - MMI data are normally distributed. We can proceed with a GLMM with a rando
 
 ```{r warning=FALSE}
 MMI_glmm <- glmmTMB(`Index Score`/100 ~ Before_After * Control_Impact + (1|Reach),
-                data =macro_data_filtered,
+                data = macro_data_filtered,
                 family = beta_family())
 
 summary(MMI_glmm)
@@ -473,8 +584,28 @@ macro_data_filtered %>%
 ```
 
 Zoom in on unique richness and show change over time. Summarize by year because richness can change throughout the season.
-```{r message=FALSE}
-macro_data_filtered %>% 
+```{r message=FALSE, warning=FALSE}
+
+# richness_reach_year.boxplot <- macro_data_filtered %>% 
+#   group_by(Site,
+#            Reach,
+#            Season) %>% 
+#   summarise(Mean_Richness = mean(`Unique Richness`, na.rm = T)) %>% 
+#   ggplot(aes(x = Reach, y = Mean_Richness, color = as.factor(Season))) +
+#   geom_boxplot() +
+#   theme_classic() +
+#   labs(x = "",
+#        y = "Taxa Richness",
+#        color = "") +
+#   theme(legend.text = element_text(color = "transparent"), # Invisible labels
+#         legend.title = element_text(color = "transparent"), # Invisible title
+#         legend.background = element_rect(fill = "transparent", color = "transparent"), # Invisible background
+#         legend.box.background = element_rect(fill = "transparent", color = "transparent") # Invisible box background
+#   ) +
+#   guides(color = guide_legend(override.aes = list(color = "transparent"))) # Ensure points/lines in legend are invisible
+
+# Version without x axis (for compound figure)
+richness_reach_year.boxplot <- macro_data_filtered %>% 
   group_by(Site,
            Reach,
            Season) %>% 
@@ -483,10 +614,46 @@ macro_data_filtered %>%
   geom_boxplot() +
   theme_classic() +
   labs(x = "",
-       y = "",
-       color = "",
-       title = "Unique Richness")
+       y = "Taxa Richness",
+       color = "") +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),legend.key = element_rect(fill = "transparent", color = "transparent"), # Invisible keys
+        legend.text = element_text(color = "transparent"), # Invisible labels
+        legend.title = element_text(color = "transparent"), # Invisible title
+        legend.background = element_rect(fill = "transparent", color = "transparent"), # Invisible background
+        legend.box.background = element_rect(fill = "transparent", color = "transparent") # Invisible box background
+  ) +
+  guides(color = guide_legend(override.aes = list(color = "transparent"))) # Ensure points/lines in legend are invisible
+
+
+richness_reach_year.boxplot
+
+#save plot if necessary
+ggsave(filename = "LakeGeorge_Richness_boxplot_4.15.2026.png",
+       width = 7,
+       height = 5,
+       scale = 0.8,
+       units = "in",
+       dpi = 600)
 ```
+
+T-Tests to test for differences in richness means between groups:
+```{r}
+# T test to test for differences in richness between control and impact reaches before the dam removal. Use alternative = "greater" b/c we hypothesize that richness is higher in the control (x) reach than the impact (y) reach
+macro_data_filtered %>% 
+  filter(Before_After == "Before") %>% 
+  t.test(`Unique Richness`~ Control_Impact,
+         data = .,
+         alternative = "greater")
+
+# T test to test for differences in richness between Upstream and Downstream reaches before the dam removal. We have no alternative hypothesis.
+macro_data_filtered %>% 
+  filter(Before_After == "Before",
+         Reach != "Control") %>% 
+  t.test(`Unique Richness`~ Reach,
+         data = .)
+```
+
 
 How has richness by feeding traits changed?
 ```{r fig.width = 14, fig.height = 10}
@@ -549,6 +716,71 @@ macro_data_filtered %>%
        color = "")
 ```
 
+## Richness BACI Test
+Does richness differ between control and impact reaches? Is so, does the difference persist after the restoration? Again, this is a test of the BACI design, and we are looking at the interaction between control/impact and before/after. Continue using the filtered data for now.
+
+First, check response variable for normality:
+
+```{r}
+# Richness - yes, normal
+qqnorm(macro_data_filtered$`Unique Richness`)
+qqline(macro_data_filtered$`Unique Richness`)
+hist(macro_data_filtered$`Unique Richness`)
+```
+
+Yes - richness is normally distributed.
+
+We can proceed with a GLMM with a random effect for reach. We use a negative binomial distribution (for count data) with a log link.
+
+```{r}
+richness_glmm <- glmmTMB(`Unique Richness` ~ Before_After * Control_Impact + (1|Reach),
+                         data = macro_data_filtered,
+                         family = nbinom1(link="log"))
+
+summary(richness_glmm)
+
+macro_data_filtered %>% 
+  ggplot(aes(x = Control_Impact, y = `Unique Richness`, color = Before_After)) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "",
+       y = "Unique Richness",
+       color = "")
+```
+A significant interaction between Before_After and Control_Impact indicates that overall richness at the impact sites significantly improved after the restoration relative to the control sites.
+
+## EPT Richness BACI Test
+Does richness *of EPTs* differ between control and impact reaches? Is so, does the difference persist after the restoration?
+
+First, check response variable for normality:
+
+```{r}
+qqnorm(macro_data_filtered$`Unique Richness - EPT`)
+qqline(macro_data_filtered$`Unique Richness - EPT`)
+hist(macro_data_filtered$`Unique Richness`)
+```
+
+Richness of EPTs is normally distributed.
+
+We can proceed with a GLMM with a random effect for reach. We use a negative binomial distribution (for count data) with a log link.
+
+```{r}
+EPT_richness_glmm <- glmmTMB(`Unique Richness - EPT` ~ Before_After * Control_Impact + (1|Reach),
+                         data = macro_data_filtered,
+                         family = nbinom2(link="log")) # change distribution to deal with warnings
+
+summary(EPT_richness_glmm)
+
+macro_data_filtered %>% 
+  ggplot(aes(x = Control_Impact, y = `Unique Richness - EPT`, color = Before_After)) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "",
+       y = "Unique Richness - EPTs",
+       color = "")
+```
+Richness of EPTs did not significantly increase in the impact reaches after the restoration relative to the control reaches.
+
 # Community Metrics Plots
 How have metrics such as Hilsenhoff's index, diversity, evenness, and relative abundance changed?
 ```{r fig.width = 14, fig.height = 8}
@@ -607,7 +839,7 @@ macro_data_filtered %>%
        color = "",
        title = "Overall Density")
 
-macro_data_filtered %>% 
+EPTdensity_reach_year.boxplot <- macro_data_filtered %>% 
   group_by(Site,
            Reach,
            Season) %>% 
@@ -616,11 +848,49 @@ macro_data_filtered %>%
   geom_boxplot() +
   theme_classic() +
   labs(x = "",
-       y = "Density (inds/m^2)",
-       color = "",
-       title = "EPT Density")
+       y = "EPT Density (Inds/m^2)",
+       color = "")
+
+EPTdensity_reach_year.boxplot
+
+#save plot if necessary
+# ggsave(filename = "LakeGeorge_EPTdensity_boxplot_4.15.2026.png",
+#        width = 7,
+#        height = 5,
+#        scale = 0.8,
+#        units = "in",
+#        dpi = 600)
 ```
 
+Combine taxa richness and EPT density plots into one
+```{r fig.width=6, fig.height=8}
+plot_grid(richness_reach_year.boxplot, EPTdensity_reach_year.boxplot, nrow = 2, labels = c('a)', 'b)'))
+```
+
+T-Tests to test for differences in density means between groups:
+```{r}
+# T test to test for differences in EPT between control and impact reaches before the dam removal. Use alternative = "greater" b/c we hypothesize that EPT density is higher in the control (x) reach than the impact (y) reach. Do we need a log transform here?
+macro_data_filtered %>% 
+  filter(Before_After == "Before") %>% 
+  t.test(`Density - EPT`~ Control_Impact,
+         data = .,
+         alternative = "greater")
+
+# T test to test for differences in EPT density between Upstream and Downstream reaches before the dam removal. We have no alternative hypothesis.
+macro_data_filtered %>% 
+  filter(Before_After == "Before",
+         Reach != "Control") %>% 
+  t.test(`Density - EPT`~ Reach,
+         data = .)
+
+# ANOVA to test for differences in means between reaches following the dam removal
+EPT_density_ANOVA <- macro_data_filtered %>% 
+  filter(Before_After == "After") %>%
+  aov(`Density - EPT`~ Reach,
+      data = .)
+summary(EPT_density_ANOVA)
+shapiro.test(residuals(EPT_density_ANOVA))
+```
 
 How has density by feeding traits changed?
 ```{r fig.width = 14, fig.height = 10}
@@ -681,79 +951,7 @@ macro_data_filtered %>%
        color = "")
 ```
 
-Filtering out samples from Upstream 1 and from Upstream 2 in Fall 2023 seems to particularly effect the density plots in the direction that we might expect. Stick with the filtered data for now.
-
-Although year is not a response variable, we also don't expect an immediate improvement after the dam was removed. Should we be plotting these metrics over time? Or maybe excluding the first year after restoration?
-
-
-## Stats
-
-# Richness BACI Test
-Does richness differ between control and impact reaches? Is so, does the difference persist after the restoration? Again, this is a test of the BACI design, and we are looking at the interaction between control/impact and before/after. Continue using the filtered data for now.
-
-First, check response variable for normality:
-
-```{r}
-# Richness - yes, normal
-qqnorm(macro_data_filtered$`Unique Richness`)
-qqline(macro_data_filtered$`Unique Richness`)
-hist(macro_data_filtered$`Unique Richness`)
-```
-
-Yes - richness is normally distributed.
-
-We can proceed with a GLMM with a random effect for reach. We use a negative binomial distribution (for count data) with a log link.
-
-```{r}
-richness_glmm <- glmmTMB(`Unique Richness` ~ Before_After * Control_Impact + (1|Reach),
-                         data = macro_data_filtered,
-                         family = nbinom1(link="log"))
-
-summary(richness_glmm)
-
-macro_data_filtered %>% 
-  ggplot(aes(x = Control_Impact, y = `Unique Richness`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  labs(x = "",
-       y = "Unique Richness",
-       color = "")
-```
-A significant interaction between Before_After and Control_Impact indicates that overall richness at the impact sites significantly improved after the restoration relative to the control sites.
-
-# EPT Richness BACI Test
-Does richness *of EPTs* differ between control and impact reaches? Is so, does the difference persist after the restoration?
-
-First, check response variable for normality:
-
-```{r}
-qqnorm(macro_data_filtered$`Unique Richness - EPT`)
-qqline(macro_data_filtered$`Unique Richness - EPT`)
-hist(macro_data_filtered$`Unique Richness`)
-```
-
-Richness of EPTs is normally distributed.
-
-We can proceed with a GLMM with a random effect for reach. We use a negative binomial distribution (for count data) with a log link.
-
-```{r}
-EPT_richness_glmm <- glmmTMB(`Unique Richness - EPT` ~ Before_After * Control_Impact + (1|Reach),
-                         data = macro_data_filtered,
-                         family = nbinom2(link="log")) # change distribution to deal with warnings
-
-summary(EPT_richness_glmm)
-
-macro_data_filtered %>% 
-  ggplot(aes(x = Control_Impact, y = `Unique Richness - EPT`, color = Before_After)) +
-  geom_boxplot() +
-  theme_classic() +
-  labs(x = "",
-       y = "Unique Richness - EPTs",
-       color = "")
-```
-Richness of EPTs did not significantly increase in the impact reaches after the restoration relative to the control reaches.
-
-# Density BACI Test
+## Density BACI Test
 Does density differ between control and impact reaches? Is so, does the difference persist after the restoration? Again, this is a test of the BACI design, and we are looking at the interaction between control/impact and before/after.
 
 First, check response variable for normality:
@@ -862,25 +1060,32 @@ colnames <- macro_taxaMatrix$`OTU Name`
 macro_taxaMatrix <- as.data.frame(t(macro_taxaMatrix)[-1,])
 colnames(macro_taxaMatrix) <- colnames
 macro_taxaMatrix <- macro_taxaMatrix %>% 
-  mutate_if(is.character, as.numeric)
+  mutate_if(is.character, as.numeric) %>% 
+  rownames_to_column("Sample ID") %>%
+  arrange(`Sample ID`) %>% # sort rows
+  column_to_rownames("Sample ID")
 
 # Filter out sample IDs that correspond to Upstream 1 and Fall 2023 - the ones that we are filtering out.
 filter_samples <- macro_sampleData %>% 
-    filter(Sample != "Fall 2023" | Site == "Upstream 1") %>% 
+  filter(Sample == "Fall 2023" | Site == "Upstream 1") %>% 
   select(`Sample ID`)
   
 macro_taxaMatrix <- macro_taxaMatrix[!rownames(macro_taxaMatrix) %in% filter_samples$`Sample ID`,]
-  
 
-# convert to matrix
-macro_taxaMatrix.m <- as.matrix(macro_taxaMatrix)
 
-# Calculate nmds
-macro_nmds <- metaMDS(macro_taxaMatrix.m, tidy = T) # uses defaults of 2 dimensions and Bray-Curtis distances
+# How many dimensions should our NMDS be?
+dimcheckMDS(macro_taxaMatrix,
+              distance = "bray",
+              k = 6)
+
+# Calculate nmds with 2 dimensions
+macro_nmds <- metaMDS(macro_taxaMatrix, 
+                      distance = "bray",
+                      tidy = T, k = 2) # uses defaults of 2 dimensions and Bray-Curtis distances
 macro_nmds # increasing to 3 dimensions lowers our stress value. Make this change if needed.
 stressplot(macro_nmds)
 ```
- Our stress value with two dimensions is fair, but not great. We're aiming for a stress value of <0.1 but <0.2 is acceptable. The stress value improves when we change to three dimensions, but that comes at the cost of some interpretability when we plot. Let's leave it at two dimensions for now.
+Our stress value with two dimensions is fair, but not great. We're aiming for a stress value of <0.1 but <0.2 is acceptable. The stress value improves when we change to three dimensions, but that comes at the cost of some interpretability when we plot. Let's leave it at two dimensions for now.
  
  Let's plot our NMDS
 ```{r message=FALSE, warning=FALSE}
@@ -889,18 +1094,20 @@ nmds_communityScores <- as.data.frame(scores(macro_nmds)$sites) %>%
   rownames_to_column(var = "Site") %>%   # change rownames (site) to a column 
   mutate(Site = as.numeric(Site)) %>% 
   left_join(macro_sampleData[,c("Sample ID", "Community", "Reach", "Before_After")], by = c("Site" = "Sample ID")) %>% 
-  mutate(Reach = Reach)
+  mutate(Community = as.factor(paste(Reach, Before_After)))
 
 # get convex hulls and their centroids
 nmds_communityHulls <- nmds_communityScores %>% 
   group_by(Community) %>% 
   slice(chull(NMDS1,NMDS2))
+
 nmds_communityCentroids <- nmds_communityScores %>% 
   group_by(Community, Reach, Before_After) %>% 
   summarise(axis1 = mean(NMDS1),
             axis2 = mean(NMDS2))
 
 
+# Plot just community hulls
 ggplot() +
   # plot communities
   geom_point(data = nmds_communityScores,
@@ -913,37 +1120,244 @@ ggplot() +
   geom_point(data = nmds_communityCentroids,
              aes(x = axis1, y = axis2, color = Reach, shape = Before_After),
              size = 5) +
+      # plot vectors
+  geom_segment(data = macro_nmds_spp_coords,
+               aes(x = 0, y = 0,
+                   xend = NMDS1, yend = NMDS2),
+               colour = "grey30") +
+  geom_text_repel(data = macro_nmds_spp_coords, 
+            aes(x = NMDS1, y = NMDS2), 
+            label = row.names(macro_nmds_spp_coords),
+            size = 3, 
+            colour = "grey30") +
   scale_shape_manual(values=c(66, 65)) +
   labs(shape = "") +
-  theme_classic()
+  theme_classic() +
+  theme(axis.text = element_blank(),
+  axis.ticks = element_blank())
 
-# plot settings for Charlie's field trip presentation:
+# back and white version of plot for Charlie's field trip presentation:
+# ggplot() +
+#   # plot communities
+#   geom_point(data = nmds_communityScores,
+#              aes(x = NMDS1, y = NMDS2, color = Reach)) +
+#   # plot hulls
+#   geom_polygon(data = nmds_communityHulls,
+#                aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+#                alpha = 0.3) +
+#   # plot centroids
+#   geom_point(data = nmds_communityCentroids,
+#              aes(x = axis1, y = axis2, color = Reach, shape = Before_After),
+#              size = 5) +
+#   scale_shape_manual(values=c(66, 65)) +
+#   labs(shape = "") +
+#   theme_classic() +
+#   scale_fill_grey() +
+#   scale_color_grey() +
+#   theme(axis.text = element_blank(),
+#   axis.ticks = element_blank())
+
+# Save plot
+# ggsave(filename = "LakeGeorge_BW_NMDSplot_4.10.2026.png",
+#        width = 7,
+#        height = 5,
+#        scale = 0.8,
+#        units = "in",
+#        dpi = 600)
+
+```
+
+Additional step: Calculate vectors and ellipses to make a version of the NMDS plot for Matt Fairchild
+```{r warning=FALSE}
+# Create dataframe with the sample and Before/After data used in the NMDS
+# macro_nmds_samples <- macro_sampleData[,c("Sample ID", "Before_After", "Reach")] %>% 
+#   filter(!`Sample ID` %in% filter_samples$`Sample ID`) %>% 
+#   mutate(`Sample ID` = as.factor(`Sample ID`),
+#          Community = paste(Reach, Before_After))
+
+# Fit taxa vectors. Here we pretend that the taxa are environmental variables that relate to the community
+macro_nmds_spp_fit <- envfit(ord = macro_nmds, 
+                             env = macro_taxaMatrix)
+
+# Fit vectors for Reach and Before_After. Here we pretend that they are environmental variables that relate to the community
+# macro_nmds_env_fit <- envfit(ord = macro_nmds,
+#                                 env = macro_nmds_samples$Community)
+
+# Filter for taxa with significant vectors
+macro_nmds_spp_scores <- as.data.frame(scores(macro_nmds_spp_fit, "vectors")) %>% 
+  mutate(pval = macro_nmds_spp_fit$vectors$pvals) %>% 
+  filter(pval < 0.01) %>% 
+  select(-pval)
+
+# Scale arrow lengths using analysis specific multiplier. More info on this at [https://jkzorz.github.io/2020/04/04/NMDS-extras.html]
+macro_nmds_spp_coords = macro_nmds_spp_scores * ordiArrowMul(macro_nmds_spp_fit)
+
+# Calculate ellipses. This code is borrowed from M. Fairchild and from:
+# Source - https://stackoverflow.com/a/13801089
+# Posted by Didzis Elferts, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-04-10, License - CC BY-SA 3.0
+
+# NMDS = data.frame(MDS1 = macro_nmds$points[,1], MDS2 = macro_nmds$points[,2],group=MyMeta$amt)
+# 
+# macro_nmds_sample_scores <- as.data.frame(scores(macro_nmds, display = "sites")) # Extract NMDS scores for each sample
+# macro_nmds_sample_scores <- macro_nmds_sample_scores %>% 
+#   rownames_to_column("Sample ID")# Make a Sample ID column
+# macro_nmds_sample_scores <- macro_nmds_sample_scores %>% 
+#   left_join(macro_nmds_samples) # Make a Before_after column
+# 
+# macro_nmds_cov_scores <- as.data.frame(scores(macro_nmds_cov_fit, display = "factors"))   # covariate intrinsic values
+# d.cov.scrs <- cbind(d.cov.scrs, cov.vars = rownames(d.cov.scrs))      # add covariate names
+# d.cov.scrs <- cbind(d.cov.scrs, pval = d.cov.fit$factors$pvals)       # add pvalues
+# d.sig.cov.scrs <- subset(d.cov.scrs, pval<=0.05)                      # subset to significant covariates only
+
+# Activate hidden function in vegan package
+veganCovEllipse <- function (cov, center = c(0, 0), scale = 1, npoints = 100) 
+  {
+  theta <- (0:npoints) * 2 * pi/npoints
+  Circle <- cbind(cos(theta), sin(theta))
+  t(center + scale * t(Circle %*% chol(cov)))
+  }
+
+# Create an empty dataframe to store ellipse data
+df_ell  <- data.frame()
+
+# To calculate ellipses, each Community must have a sample size of three or more. Create a dummy row with average NMDS values to add one more sample for the Upstream Before community
+dummy_row <- data.frame(Site = 9999, 
+                        NMDS1 = mean(filter(nmds_communityScores, Community == "Upstream Before")$NMDS1),
+                        NMDS2 = mean(filter(nmds_communityScores, Community == "Upstream Before")$NMDS2),
+                        Community = "Upstream Before",
+                        Reach = "Upstream",
+                        Before_After = "Before")
+
+nmds_communityScores <- rbind(nmds_communityScores, dummy_row)
+  
+# Calculate ellipse geometry
+for(g in levels(nmds_communityScores$Community))
+{
+  df_ell <- rbind(df_ell, cbind(as.data.frame(with(nmds_communityScores[nmds_communityScores$Community==g,],
+                                                          veganCovEllipse(cov.wt(cbind(NMDS1,NMDS2),wt=rep(1/length(NMDS1),
+                                                                                                           length(NMDS1)))$cov,center=c(mean(NMDS1),mean(NMDS2))))),Community=g))
+}
+
+# Create Reach and Before_After columns for plotting
+df_ell <- df_ell %>% 
+  mutate(Reach = word(Community, 1),
+         Before_After = word(Community, 2))
+
+# Order the Reach factor
+df_ell$Reach = factor(df_ell$Reach,
+                          levels = c("Control",
+                                     "Upstream",
+                                     "Downstream"))
+
 ggplot() +
   # plot communities
-  geom_point(data = nmds_communityScores,
-             aes(x = NMDS1, y = NMDS2, color = Reach)) +
+  geom_point(data = filter(nmds_communityScores, Site != 9999),
+             aes(x = NMDS1, y = NMDS2, colour = Reach)) +
   # plot hulls
-  geom_polygon(data = nmds_communityHulls,
+  # geom_polygon(data = nmds_communityHulls,
+  #              aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+  #              alpha = 0.3) +
+  geom_polygon(data = df_ell,
                aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
                alpha = 0.3) +
+  
   # plot centroids
   geom_point(data = nmds_communityCentroids,
              aes(x = axis1, y = axis2, color = Reach, shape = Before_After),
              size = 5) +
+  
+  # plot vectors
+  geom_segment(data = macro_nmds_spp_coords,
+               aes(x = 0, y = 0,
+                   xend = NMDS1, yend = NMDS2),
+               colour = "grey30") +
+  geom_text_repel(data = macro_nmds_spp_coords, 
+            aes(x = NMDS1, y = NMDS2), 
+            label = row.names(macro_nmds_spp_coords),
+            size = 3, 
+            colour = "grey30") +
+  
   scale_shape_manual(values=c(66, 65)) +
   labs(shape = "") +
   theme_classic() +
-  scale_fill_manual(values = ibm_palette[c(1,3,5)]) +
-  scale_color_manual(values = ibm_palette[c(1,3,5)])
+  theme(axis.text = element_blank(),
+  axis.ticks = element_blank())
 
 # Save plot
-ggsave(filename = "LakeGeorge_NMDSplot_3.12.2026.png",
+ggsave(filename = "LakeGeorge_NMDSplot_EllipsesVectors_4.14.2026.png",
        width = 7,
-       height = 5,
-       scale = 0.8,
+       height = 4.5,
+       scale = 1.25,
        units = "in",
        dpi = 600)
 ```
+
+
+Plot community hulls and taxa vectors in a before/after plot
+```{r fig.height=8, fig.width=6, message=FALSE, warning=FALSE}
+a <- ggplot() +
+  # plot communities
+  geom_point(data = filter(nmds_communityScores, Before_After == "Before"),
+             aes(x = NMDS1, y = NMDS2, colour = Reach)) +
+  # plot hulls
+  # geom_polygon(data = filter(df_ell),
+  #              aes(x = NMDS1, y = NMDS2, fill = Reach_BA, group = Reach_BA),
+  #              alpha = 0.3) +
+  # stat_ellipse(data = filter(nmds_communityHulls, Before_After == "Before"),
+  #              aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+  #              geom = "polygon",
+  #              alpha = 0.3) +
+  # plot vectors
+  geom_segment(data = macro_nmds_spp_coords,
+               aes(x = 0, y = 0,
+                   xend = NMDS1, yend = NMDS2),
+               colour = "grey30") +
+  geom_text(data = macro_nmds_spp_coords, 
+            aes(x = NMDS1, y = NMDS2), 
+            label = row.names(macro_nmds_spp_coords),
+            size = 3, 
+            colour = "grey30",
+            position = position_jitter(width = 0.1,height = 0.1)) +
+  theme_classic() +
+  theme(axis.text = element_blank(),
+  axis.ticks = element_blank()) +
+  labs(title = "Before")
+
+ggplot() +
+  # plot communities
+  geom_point(data = filter(nmds_communityScores, Before_After == "After"),
+             aes(x = NMDS1, y = NMDS2, colour = Reach)) +
+  # plot hulls
+  # geom_polygon(data = filter(nmds_communityHulls, Before_After == "After"),
+  #              aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+  #              alpha = 0.3) +
+  stat_ellipse(data = filter(nmds_communityHulls, Before_After == "After"),
+               aes(x = NMDS1, y = NMDS2, fill = Reach, group = Community),
+               geom = "polygon",
+               level = 0.95,
+               alpha = 0.3) +
+  #geom_mark
+  # plot vectors
+  geom_segment(data = macro_nmds_spp_coords,
+               aes(x = 0, y = 0,
+                   xend = NMDS1, yend = NMDS2),
+               colour = "grey30") +
+  geom_text(data = macro_nmds_spp_coords, 
+            aes(x = NMDS1, y = NMDS2), 
+            label = row.names(macro_nmds_spp_coords),
+            size = 3, 
+            colour = "grey30",
+            position = position_jitter(width = 0.1,height = 0.1)) +
+  theme_classic() +
+  theme(axis.text = element_blank(),
+  axis.ticks = element_blank()) +
+  labs(title = "After")
+
+plot_grid(a, b, nrow = 2, labels = c('a)', 'b)'))
+```
+
+ 
  
  Did the control reaches significantly change?
 ```{r}
@@ -1056,6 +1470,8 @@ ggplot() +
   scale_shape_manual(values=c(66, 65)) +
   labs(shape = "") +
   theme_classic()
+
+plot_grid(a, b, nrow = 2, labels = c('A', 'B'))
 ```
 The stress value improves slightly over that of the abundance NMDS. But it's very small. Is it worth doing this? Or should I stick with the abundance NMDS plot?
 
