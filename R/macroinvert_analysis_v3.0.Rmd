@@ -21,13 +21,14 @@ library(here)        # For relative file paths
 library(ggpattern)   # For using patterns in ggplot2
 library(goeveg)      # For checking how many NMDS dimensions are required
 library(ggforce)     # For plotting hulls on NMDS plots
+library(ggrepel)     # For text repel on plots
 ```
 
 Updates from v2.0: Update plots to compound/multi-panel.
 
 ```{r loadData}
 # specify folder path where results are saved
-loadPath <- loadPath <- here::here("data","LakeGeorge_historical_CO_MMI.xlsx")
+loadPath <- loadPath <- here::here("data","LakeGeorge_historical_CO_MMI April 2026.xlsx")
 
 #----------------------------------------------------------------------------------
 # Load sample data
@@ -55,16 +56,16 @@ macro_sampleData <- macro_sampleData %>%
                             `Collection Date` > '2023-9-1' & `Collection Date` < '2023-12-31' ~ "Fall 2023",
                             `Collection Date` > '2024-5-31' & `Collection Date` < '2024-9-1' ~ "Summer 2024",
                             `Collection Date` > '2024-9-1' & `Collection Date` < '2024-12-31' ~ "Fall 2024",
-                            `Collection Date` > '2025-5-31' & `Collection Date` < '2025-9-1' ~ "Summer 2025"))
-                            #`Collection Date` > '2025-9-1' & `Collection Date` < '2025-12-31' ~ "Fall 2025"))
+                            `Collection Date` > '2025-5-31' & `Collection Date` < '2025-9-1' ~ "Summer 2025",
+                            `Collection Date` > '2025-9-1' & `Collection Date` < '2025-12-31' ~ "Fall 2025"))
 
 macro_sampleData$Sample <- factor(macro_sampleData$Sample,
                                levels = c("Summer 2023",
                                           "Fall 2023",
                                           "Summer 2024",
                                           "Fall 2024",
-                                          "Summer 2025"))
-                                         # "Fall 2025"))
+                                          "Summer 2025",
+                                          "Fall 2025"))
 
 # Add a "Season" variable
 macro_sampleData <- macro_sampleData %>% 
@@ -142,10 +143,9 @@ macro_sampleData$Community = factor(macro_sampleData$Community,
 
 #----------------------------------------------------------------------------------
 # Load multi-metric index data (CO MMI v5)
-macro_indices <- read_excel(loadPath, sheet = "Index results - CO_MMI_v5")
-# macro_indices <- read_excel(loadPath, sheet = "Index results")
-# macro_indices <- macro_indices %>% 
-#   filter(`Index Name` == "CO Ecological Data Application System Multimetric Index - Transition 2025")
+macro_indices <- read_excel(loadPath, sheet = "Index results")
+macro_indices <- macro_indices %>%
+  filter(`Index Name` == "CO Ecological Data Application System Multimetric Index - Transition 2025")
 
 #----------------------------------------------------------------------------------
 # Load metrics data
@@ -170,12 +170,15 @@ macro_data <- macro_data %>%
 # Filtering Data
 Consider filtering out samples collected in Fall 2023 and from all the Upstream 1 samples. The Fall 2023 sample was collected in early December, as soon as researchers had permission to re-enter the restoration site. Construction equipment was still in the river and the area was certainly not in a "post-restoration" state. The Upstream 1 site ended up being slightly upstream of the dam impoundment, and so was not in the area affected by the dam removal. In a sense, it's more like a control reach than an impact reach because it didn't receive the treatment.
 ```{r}
+# macro_data_filtered <- macro_data %>% 
+#   filter(Sample != "Fall 2023", #`Sample ID` != 215075,
+#          Site != "Upstream 1")
 macro_data_filtered <- macro_data %>% 
-  filter(Sample != "Fall 2023", #`Sample ID` != 215075,
+  filter(! Sample %in% c("Fall 2023"), #`Sample ID` != 215075,
          Site != "Upstream 1")
 ```
 
-# MMI
+# MMI Plots
 The Colorado Ecological Data Application System Multimetric Index (MMI) is a bioassessment tool developed by the Colorado Water Quality Control Division with assistance from the US EPA to quantify the health of aquatic ecosystems within the state based on macroinvertebrate assemblages. It uses three Biotypes and assigns a score from 0-100. For more information, see the [Colorado Department of Public Health and the Environment's Policy Statement 10-1](https://drive.google.com/file/d/1Hj_ytnBJS2kF7T-e2uY6P1dfEvkEbmVS/view?usp=sharing), *Aquatic Life Use Attainment: Methodology to Determine Use Attainment for Rivers and Streams*. The study site in Elevenmile Canyon near lake George, CO falls within the *transition* biotype.
 
 MMI scores are assessed as follows:
@@ -204,8 +207,9 @@ macro_data_filtered %>%
   geom_text(aes(x = "Downstream 3", y = 52), label = "High-Scoring", size = 3)
 ```
 
+Line plot version of the above
 ```{r message=FALSE, warning=FALSE}
-macro_data_filtered %>% 
+macro_data %>% 
   ggplot(aes(x = Sample, y = `Index Score`, group = 1)) +
   geom_line() + 
   geom_point() +
@@ -226,117 +230,17 @@ macro_data_filtered %>%
   geom_text(aes(x = "Summer 2023", y = 52), label = "High-Scoring", size = 2.5)
 ```
 
-Visualize MMI, richness, and EPT change over time in a compound line plot. Summarize richness and density by year because they can vary seasonally.
-```{r fig.height=10, fig.width=7, message=FALSE, warning=FALSE}
-# Create a summary table
-stats_over_time_Sample <- macro_data_filtered %>% 
-  group_by(Reach,
-           Sample) %>% 
-  summarise(Mean_MMI = mean(`Index Score`, na.rm = T),
-            SD_MMI = sd(`Index Score`, na.rm = T),
-            Mean_Richness = mean(`Unique Richness`, na.rm = T),
-            SD_Richness = sd(`Unique Richness`, na.rm = T),
-            Mean_EPT_Density = mean(`Density - EPT`, na.rm = T),
-            SD_EPT_Density = sd(`Density - EPT`, na.rm = T))
-
-stats_over_time_Season <- macro_data_filtered %>% 
-  group_by(Reach,
-           Season = as.factor(Season)) %>% 
-  summarise(Mean_MMI = mean(`Index Score`, na.rm = T),
-            SD_MMI = sd(`Index Score`, na.rm = T),
-            Mean_Richness = mean(`Unique Richness`, na.rm = T),
-            SD_Richness = sd(`Unique Richness`, na.rm = T),
-            Mean_EPT_Density = mean(`Density - EPT`, na.rm = T),
-            SD_EPT_Density = sd(`Density - EPT`, na.rm = T))
-  
-a <- stats_over_time_Sample %>% 
-  ggplot(aes(x = Sample, y = Mean_MMI, color = Reach, group = Reach)) +
-  geom_point() +
-  geom_line() +
-  geom_errorbar(aes(ymin = Mean_MMI - SD_MMI, ymax = Mean_MMI + SD_MMI),
-                width=0.2,
-                position=position_dodge(0.05)) +
-  theme_classic() +
-  labs(x = "",
-       y = "Colorado MMI Score",
-       color = "") +
-  
-  # labels
-  geom_hline(aes(yintercept = 33), linetype="dashed") +
-  geom_hline(aes(yintercept = 43), linetype="dashed") +
-  geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Fall 2025", y = 32), label = "Impairment", size = 2.5, color = "Black", show.legend = F) +
-  geom_text(aes(x = "Fall 2025", y = 42), label = "Attainment", size = 2.5, color = "Black",show.legend = F) +
-  geom_text(aes(x = "Fall 2025", y = 52), label = "High-Scoring", size = 2.5, color = "Black",show.legend = F)
-
-b <- stats_over_time_Season %>% 
-  ggplot(aes(x = Season, y = Mean_Richness, color = Reach, group = Reach)) +
-  geom_point() +
-  geom_line() +
-  geom_errorbar(aes(ymin = Mean_Richness - SD_Richness, ymax = Mean_Richness + SD_Richness),
-                width=0.2,
-                position=position_dodge(0.05)) +
-  theme_classic() +
-  labs(x = "",
-       y = "Taxa Richness",
-       color = "")
-
-c <- stats_over_time_Season %>% 
-  ggplot(aes(x = Season, y = Mean_EPT_Density, color = Reach, group = Reach)) +
-  geom_point() +
-  geom_line() +
-  geom_errorbar(aes(ymin = Mean_EPT_Density - SD_EPT_Density, ymax = Mean_EPT_Density + SD_EPT_Density),
-                width=0.2,
-                position=position_dodge(0.05)) +
-  theme_classic() +
-  labs(x = "",
-       y = "EPT Density (Inds/m^2)",
-       color = "")
-
-plot_grid(a, b, c, nrow = 3, labels = c('a)', 'b)', 'c)'))
-```
-
-
-```{r}
-# Make a grayscale version of the MMI over time plot for Charlie's Lake George fieldtrip
-stats_over_time_Sample %>% 
-  ggplot(aes(x = Sample, y = Mean_MMI, group = Reach)) +
-  geom_point() +
-  geom_line(aes(linetype = Reach)) +
-  geom_errorbar(aes(ymin = Mean_MMI - SD_MMI, ymax = Mean_MMI + SD_MMI),
-                width=0.2,
-                position=position_dodge(0.05)) +
-  theme_classic() +
-  labs(x = "",
-       y = "Colorado MMI Score") +
-  
-  # labels
-  geom_hline(aes(yintercept = 33), linetype="dashed") +
-  geom_hline(aes(yintercept = 43), linetype="dashed") +
-  geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Fall 2025", y = 32), label = "Impairment", size = 2.5, color = "Black", show.legend = F) +
-  geom_text(aes(x = "Fall 2025", y = 42), label = "Attainment", size = 2.5, color = "Black",show.legend = F) +
-  geom_text(aes(x = "Fall 2025", y = 52), label = "High-Scoring", size = 2.5, color = "Black",show.legend = F)
-
-#save plot
-# ggsave(filename = "LakeGeorge_BW_MMIlinePlot_4.10.2026.png",
-#        width = 7,
-#        height = 5,
-#        scale = 0.8,
-#        units = "in",
-#        dpi = 600)
-```
-
 
 How has the MMI score of each study reach (i.e. control, upstream, downstream) changed over the course of the study?
 ```{r message=FALSE, warning=FALSE}
 # save a color palette
-#ibm_palette <- c("#ffb000", "#fe6100","#dc267f","#785ef0","#648fff")
+ibm_palette <- c("#ffb000", "#fe6100","#dc267f","#785ef0","#648fff")
 
 macro_data_filtered %>% 
   ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
   geom_boxplot() +
   theme_classic() +
+  scale_color_manual(values = ibm_palette) +
   labs(x = "",
        y = "Colorado MMI",
        color = "") +
@@ -347,6 +251,14 @@ macro_data_filtered %>%
   geom_text(aes(x = "Downstream", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
   geom_text(aes(x = "Downstream", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
+
+#save plot if necessary
+# ggsave(filename = "LakeGeorge_MMIboxplot_5.5.2026.png",
+#        width = 11,
+#        height = 7.5,
+#        scale = 0.7,
+#        units = "in",
+#        dpi = 600)
 
 # grayscale version of plot for Charlie's Lake George tour presentation
 macro_data_filtered %>%
@@ -367,30 +279,11 @@ macro_data_filtered %>%
   geom_text(aes(x = "Control", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = -0.3) +
   geom_text(aes(x = "Control", y = 54), label = "High-scoring", size = 3, color = "black", nudge_x = -0.26)
 
-# and a grayscale version of the line plot
-macro_data_filtered %>%
-  ggplot(aes(x = Reach, y = `Index Score`, color = Sample)) +
-  stat_boxplot(geom = "errorbar") +
-  geom_boxplot(fill = "white") +
-  theme_classic() +
-  scale_color_grey() +
-  #scale_color_manual(values = ibm_palette) +
-  labs(x = "",
-       y = "Colorado MMI",
-       color = "") +
-  # labels
-  geom_hline(aes(yintercept = 33), linetype="dashed") +
-  geom_hline(aes(yintercept = 43), linetype="dashed") +
-  geom_hline(aes(yintercept = 53), linetype="dashed") +
-  geom_text(aes(x = "Control", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = -0.3) +
-  geom_text(aes(x = "Control", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = -0.3) +
-  geom_text(aes(x = "Control", y = 54), label = "High-scoring", size = 3, color = "black", nudge_x = -0.26)
-
 #save plot if necessary
-# ggsave(filename = "LakeGeorge_BW_MMIboxplot_4.10.2026.png",
-#        width = 7,
-#        height = 5,
-#        scale = 0.8,
+# ggsave(filename = "LakeGeorge_MMIboxplot_5.5.2026.png",
+#        width = 11,
+#        height = 7.5,
+#        scale = 0.7,
 #        units = "in",
 #        dpi = 600)
 ```
@@ -546,9 +439,24 @@ MMI_glmm <- glmmTMB(`Index Score`/100 ~ Before_After * Control_Impact + (1|Reach
                 family = beta_family())
 
 summary(MMI_glmm)
+
+macro_data_filtered %>%
+  ggplot(aes(x = Control_Impact, y = `Index Score`, color = Before_After)) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "",
+       y = "Colorado MMI",
+       color = "") +
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Impact", y = 32), label = "Impairment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Impact", y = 44), label = "Attainment", size = 3, color = "black", nudge_x = 0.4) +
+  geom_text(aes(x = "Impact", y = 54), label = "High-Scoring", size = 3, color = "black", nudge_x = 0.4)
 ```
 
-We see a trend in the interaction between Before_After and Control_Impact, indicating that the MMI scores at the impact sites likely improved after the restoration relative to MMI scores at the control sites.
+There is a significant effect of the interaction between Before_After and Control_Impact, indicating that the MMI scores at the impact sites significantly improved after the restoration relative to MMI scores at the control sites.
 
 What about the sites with MMI scores that fall between impairment and attainment? The CO MMI v5 update includes auxiliary thresholds for this determination based off of the Hilsenhoff Biotic Index and the Shannon Diversity Index:
 
@@ -585,7 +493,26 @@ macro_data_filtered %>%
 
 Zoom in on unique richness and show change over time. Summarize by year because richness can change throughout the season.
 ```{r message=FALSE, warning=FALSE}
+richness_reach_year.boxplot <- macro_data_filtered %>%
+  group_by(Site,
+           Reach,
+           Season) %>%
+  summarise(Mean_Richness = mean(`Unique Richness`, na.rm = T)) %>%
+  ggplot(aes(x = Reach, y = Mean_Richness, color = as.factor(Season))) +
+  geom_boxplot() +
+  theme_classic() +
+  scale_color_manual(values = ibm_palette[c(1,3,5)]) +
+  labs(x = "",
+       y = "Taxa Richness",
+       color = "") +
+  theme(legend.text = element_text(color = "transparent"), # Invisible labels
+        legend.title = element_text(color = "transparent"), # Invisible title
+        legend.background = element_rect(fill = "transparent", color = "transparent"), # Invisible background
+        legend.box.background = element_rect(fill = "transparent", color = "transparent") # Invisible box background
+  ) +
+  guides(color = guide_legend(override.aes = list(color = "transparent"))) # Ensure points/lines in legend are invisible
 
+# Version without x axis (for compound figure)
 # richness_reach_year.boxplot <- macro_data_filtered %>% 
 #   group_by(Site,
 #            Reach,
@@ -597,44 +524,25 @@ Zoom in on unique richness and show change over time. Summarize by year because 
 #   labs(x = "",
 #        y = "Taxa Richness",
 #        color = "") +
-#   theme(legend.text = element_text(color = "transparent"), # Invisible labels
+#   theme(axis.text.x=element_blank(),
+#         axis.ticks.x=element_blank(),legend.key = element_rect(fill = "transparent", color = "transparent"), # Invisible keys
+#         legend.text = element_text(color = "transparent"), # Invisible labels
 #         legend.title = element_text(color = "transparent"), # Invisible title
 #         legend.background = element_rect(fill = "transparent", color = "transparent"), # Invisible background
 #         legend.box.background = element_rect(fill = "transparent", color = "transparent") # Invisible box background
 #   ) +
 #   guides(color = guide_legend(override.aes = list(color = "transparent"))) # Ensure points/lines in legend are invisible
 
-# Version without x axis (for compound figure)
-richness_reach_year.boxplot <- macro_data_filtered %>% 
-  group_by(Site,
-           Reach,
-           Season) %>% 
-  summarise(Mean_Richness = mean(`Unique Richness`, na.rm = T)) %>% 
-  ggplot(aes(x = Reach, y = Mean_Richness, color = as.factor(Season))) +
-  geom_boxplot() +
-  theme_classic() +
-  labs(x = "",
-       y = "Taxa Richness",
-       color = "") +
-  theme(axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(),legend.key = element_rect(fill = "transparent", color = "transparent"), # Invisible keys
-        legend.text = element_text(color = "transparent"), # Invisible labels
-        legend.title = element_text(color = "transparent"), # Invisible title
-        legend.background = element_rect(fill = "transparent", color = "transparent"), # Invisible background
-        legend.box.background = element_rect(fill = "transparent", color = "transparent") # Invisible box background
-  ) +
-  guides(color = guide_legend(override.aes = list(color = "transparent"))) # Ensure points/lines in legend are invisible
-
 
 richness_reach_year.boxplot
 
 #save plot if necessary
-ggsave(filename = "LakeGeorge_Richness_boxplot_4.15.2026.png",
-       width = 7,
-       height = 5,
-       scale = 0.8,
-       units = "in",
-       dpi = 600)
+# ggsave(filename = "LakeGeorge_Richness_boxplot_5.5.2026.png",
+#        width = 7,
+#        height = 5,
+#        scale = 0.8,
+#        units = "in",
+#        dpi = 600)
 ```
 
 T-Tests to test for differences in richness means between groups:
@@ -802,6 +710,37 @@ macro_data_filtered %>%
        color = "")
 ```
 
+## Diversity BACI Test
+Does diversity differ between control and impact reaches? Is so, does the difference persist after the restoration? We use Shannon's Diversity here and convert it to a Hill's number, which accounts for the non-linearity of standard measures of diversity. See more about Hill's numbers [here](https://pmc.ncbi.nlm.nih.gov/articles/PMC2982003/).
+
+First, check response variable for normality:
+
+```{r}
+qqnorm(macro_data_filtered$`Unique Shannons`)
+qqline(macro_data_filtered$`Unique Shannons`)
+hist(macro_data_filtered$`Unique Shannons`)
+```
+
+Shannon's diversity is normally distributed.
+
+We proceed with a GLMM with a random effect for reach. We use a gamma distribution with a log link.
+
+```{r}
+Shannons_glmm <- glmmTMB(`Unique Shannons` ~ Before_After * Control_Impact + (1|Reach),
+                data = macro_data_filtered,
+                family = Gamma(link = "log"))
+
+summary(Shannons_glmm)
+
+macro_data_filtered %>% 
+  ggplot(aes(x = Control_Impact, y = `Unique Shannons`, color = Before_After)) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(y = "Shannon's Diversity")
+```
+A trend. Shannon's diversity slightly increased at the impact reaches relative to the control reach.
+
+
 # Density Plots
 How has overall and taxon-specific density changed?
 ```{r fig.width = 14, fig.height = 10}
@@ -825,7 +764,7 @@ macro_data_filtered %>%
 ```
 
 Zoom in on overall and EPT density and show change over time. Summarize by year because density can change throughout the season.
-```{r message=FALSE}
+```{r message=FALSE, warning=FALSE}
 macro_data_filtered %>% 
   group_by(Site,
            Reach,
@@ -847,6 +786,7 @@ EPTdensity_reach_year.boxplot <- macro_data_filtered %>%
   ggplot(aes(x = Reach, y = `Mean_Density_EPTs`, color = as.factor(Season))) +
   geom_boxplot() +
   theme_classic() +
+  scale_color_manual(values = ibm_palette[c(1,3,5)]) +
   labs(x = "",
        y = "EPT Density (Inds/m^2)",
        color = "")
@@ -854,17 +794,12 @@ EPTdensity_reach_year.boxplot <- macro_data_filtered %>%
 EPTdensity_reach_year.boxplot
 
 #save plot if necessary
-# ggsave(filename = "LakeGeorge_EPTdensity_boxplot_4.15.2026.png",
+# ggsave(filename = "LakeGeorge_EPTdensity_boxplot_5.15.2026.png",
 #        width = 7,
 #        height = 5,
 #        scale = 0.8,
 #        units = "in",
 #        dpi = 600)
-```
-
-Combine taxa richness and EPT density plots into one
-```{r fig.width=6, fig.height=8}
-plot_grid(richness_reach_year.boxplot, EPTdensity_reach_year.boxplot, nrow = 2, labels = c('a)', 'b)'))
 ```
 
 T-Tests to test for differences in density means between groups:
@@ -945,7 +880,8 @@ macro_data_filtered %>%
   ggplot(aes(x = Reach, y = `Value`, color = Before_After)) +
   geom_boxplot() +
   theme_classic() +
-  facet_wrap(~Metric) +
+  facet_wrap(~Metric,
+             scales = "free_y") +
   labs(x = "",
        y = "",
        color = "")
@@ -1012,35 +948,114 @@ macro_data_filtered %>%
 ```
 A significant interaction between Before_After and Control_Impact indicates that overall EPT density at the impact sites significantly improved after the restoration relative to the control sites.
 
-# Diversity BACI Test
-Does diversity differ between control and impact reaches? Is so, does the difference persist after the restoration? We use Shannon's Diversity here and convert it to a Hill's number, which accounts for the non-linearity of standard measures of diversity. See more about Hill's numbers [here](https://pmc.ncbi.nlm.nih.gov/articles/PMC2982003/).
 
-First, check response variable for normality:
+# Additonal Plots
+Visualize MMI, richness, and EPT change over time in a compound line plot. Summarize richness and density by year because they can vary seasonally.
+```{r fig.height=10, fig.width=7, message=FALSE, warning=FALSE}
+# Create a summary table
+stats_over_time_Sample <- macro_data_filtered %>% 
+  group_by(Reach,
+           Sample) %>% 
+  summarise(Mean_MMI = mean(`Index Score`, na.rm = T),
+            SD_MMI = sd(`Index Score`, na.rm = T),
+            Mean_Richness = mean(`Unique Richness`, na.rm = T),
+            SD_Richness = sd(`Unique Richness`, na.rm = T),
+            Mean_EPT_Density = mean(`Density - EPT`, na.rm = T),
+            SD_EPT_Density = sd(`Density - EPT`, na.rm = T))
 
-```{r}
-qqnorm(macro_data_filtered$`Unique Shannons`)
-qqline(macro_data_filtered$`Unique Shannons`)
-hist(macro_data_filtered$`Unique Shannons`)
-```
-
-Shannon's diversity is normally distributed.
-
-We proceed with a GLMM with a random effect for reach. We use a gamma distribution with a log link.
-
-```{r}
-Shannons_glmm <- glmmTMB(`Unique Shannons` ~ Before_After * Control_Impact + (1|Reach),
-                data = macro_data_filtered,
-                family = Gamma(link = "log"))
-
-summary(Shannons_glmm)
-
-macro_data_filtered %>% 
-  ggplot(aes(x = Control_Impact, y = `Unique Shannons`, color = Before_After)) +
-  geom_boxplot() +
+stats_over_time_Season <- macro_data_filtered %>% 
+  group_by(Reach,
+           Season = as.factor(Season)) %>% 
+  summarise(Mean_MMI = mean(`Index Score`, na.rm = T),
+            SD_MMI = sd(`Index Score`, na.rm = T),
+            Mean_Richness = mean(`Unique Richness`, na.rm = T),
+            SD_Richness = sd(`Unique Richness`, na.rm = T),
+            Mean_EPT_Density = mean(`Density - EPT`, na.rm = T),
+            SD_EPT_Density = sd(`Density - EPT`, na.rm = T))
+  
+a <- stats_over_time_Sample %>% 
+  ggplot(aes(x = Sample, y = Mean_MMI, color = Reach, group = Reach)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = Mean_MMI - SD_MMI, ymax = Mean_MMI + SD_MMI),
+                width=0.2,
+                position=position_dodge(0.05)) +
   theme_classic() +
-  labs(y = "Shannon's Diversity")
+  labs(x = "",
+       y = "Colorado MMI Score",
+       color = "") +
+  
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Fall 2025", y = 32), label = "Impairment", size = 2.5, color = "Black", show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 42), label = "Attainment", size = 2.5, color = "Black",show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 52), label = "High-Scoring", size = 2.5, color = "Black",show.legend = F)
+
+b <- stats_over_time_Season %>% 
+  ggplot(aes(x = Season, y = Mean_Richness, color = Reach, group = Reach)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = Mean_Richness - SD_Richness, ymax = Mean_Richness + SD_Richness),
+                width=0.2,
+                position=position_dodge(0.05)) +
+  theme_classic() +
+  labs(x = "",
+       y = "Taxa Richness",
+       color = "")
+
+c <- stats_over_time_Season %>% 
+  ggplot(aes(x = Season, y = Mean_EPT_Density, color = Reach, group = Reach)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = Mean_EPT_Density - SD_EPT_Density, ymax = Mean_EPT_Density + SD_EPT_Density),
+                width=0.2,
+                position=position_dodge(0.05)) +
+  theme_classic() +
+  labs(x = "",
+       y = "EPT Density (Inds/m^2)",
+       color = "")
+
+plot_grid(a, b, c, nrow = 3, labels = c('a)', 'b)', 'c)'))
 ```
-A trend. Shannon's diversity slightly increased at the impact reaches relative to the control reach.
+
+
+```{r}
+# Make a grayscale version of the MMI over time plot for Charlie's Lake George field trip
+stats_over_time_Sample %>% 
+  ggplot(aes(x = Sample, y = Mean_MMI, group = Reach)) +
+  geom_point() +
+  geom_line(aes(linetype = Reach)) +
+  geom_errorbar(aes(ymin = Mean_MMI - SD_MMI, ymax = Mean_MMI + SD_MMI),
+                width=0.2,
+                position=position_dodge(0.05)) +
+  theme_classic() +
+  labs(x = "",
+       y = "Colorado MMI Score") +
+  
+  # labels
+  geom_hline(aes(yintercept = 33), linetype="dashed") +
+  geom_hline(aes(yintercept = 43), linetype="dashed") +
+  geom_hline(aes(yintercept = 53), linetype="dashed") +
+  geom_text(aes(x = "Fall 2025", y = 32), label = "Impairment", size = 2.5, color = "Black", show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 42), label = "Attainment", size = 2.5, color = "Black",show.legend = F) +
+  geom_text(aes(x = "Fall 2025", y = 52), label = "High-Scoring", size = 2.5, color = "Black",show.legend = F)
+
+#save plot
+# ggsave(filename = "LakeGeorge_BW_MMIlinePlot_4.10.2026.png",
+#        width = 7,
+#        height = 5,
+#        scale = 0.8,
+#        units = "in",
+#        dpi = 600)
+```
+
+
+Combine taxa richness and EPT density plots into one
+```{r fig.width=6, fig.height=8}
+plot_grid(richness_reach_year.boxplot, EPTdensity_reach_year.boxplot, nrow = 2, labels = c('a)', 'b)'))
+```
 
 # Non-Metric Multi Dimensional Scaling (NMDS)
  NMDS is a method that allows us to consolidate multidimensional data (in our case, many OTUs) into a 2D or 3D representation of community structure and/or change between communities. In our case, in addition to treating Control, Upstream, and Downstream as separate communities, we also treat the Before and After states of these reaches as separate communities.
@@ -1282,15 +1297,17 @@ ggplot() +
   labs(shape = "") +
   theme_classic() +
   theme(axis.text = element_blank(),
-  axis.ticks = element_blank())
+  axis.ticks = element_blank()) +
+  scale_color_manual(values = ibm_palette[c(1,3,5)]) +
+  scale_fill_manual(values = ibm_palette[c(1,3,5)])
 
 # Save plot
-ggsave(filename = "LakeGeorge_NMDSplot_EllipsesVectors_4.14.2026.png",
-       width = 7,
-       height = 4.5,
-       scale = 1.25,
-       units = "in",
-       dpi = 600)
+# ggsave(filename = "LakeGeorge_NMDSplot_EllipsesVectors_5.5.2026.png",
+#        width = 7,
+#        height = 4.75,
+#        scale = 1.25,
+#        units = "in",
+#        dpi = 600)
 ```
 
 
@@ -1324,7 +1341,7 @@ a <- ggplot() +
   axis.ticks = element_blank()) +
   labs(title = "Before")
 
-ggplot() +
+b <- ggplot() +
   # plot communities
   geom_point(data = filter(nmds_communityScores, Before_After == "After"),
              aes(x = NMDS1, y = NMDS2, colour = Reach)) +
@@ -1356,8 +1373,6 @@ ggplot() +
 
 plot_grid(a, b, nrow = 2, labels = c('a)', 'b)'))
 ```
-
- 
  
  Did the control reaches significantly change?
 ```{r}
